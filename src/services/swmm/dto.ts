@@ -105,6 +105,40 @@ export interface SwmmSnapshotSummary {
   activeBlockageCount: number
 }
 
+export type SwmmRiskSeverity = 'NORMAL' | 'WATCH' | 'WARNING' | 'CRITICAL'
+
+export interface SwmmRiskEvent {
+  eventId: string
+  eventType: string
+  severity: SwmmRiskSeverity
+  source: 'node' | 'link' | 'editorObject' | string
+  sourceId: string
+  metrics: Record<string, unknown>
+  reason: string
+}
+
+export interface SwmmRiskPayload {
+  ok: boolean
+  highestSeverity: SwmmRiskSeverity
+  events: SwmmRiskEvent[]
+  summary: Record<string, unknown>
+  validation: Record<string, unknown>
+  counters?: Record<string, unknown>
+}
+
+export interface SwmmLlmTriggerPayload {
+  shouldTrigger: boolean
+  reason: string | null
+  contextLevel: 'optimal' | 'medium' | 'full'
+  triggeredIssues: Array<Record<string, unknown>>
+  newIssueCount: number
+  escalatedIssueCount: number
+  activeIssueCount: number
+  resolvedIssues: Array<Record<string, unknown>>
+  suppression: Record<string, unknown>
+  context?: Record<string, unknown>
+}
+
 export interface SwmmRealtimeSnapshot {
   type: string
   ok: boolean
@@ -122,6 +156,8 @@ export interface SwmmRealtimeSnapshot {
   links: Record<string, SwmmLinkState>
   editorObjects: Record<string, SwmmEditorObjectState>
   summary: SwmmSnapshotSummary
+  risk?: SwmmRiskPayload
+  llmTrigger?: SwmmLlmTriggerPayload
 }
 
 export interface EngineStartRequest {
