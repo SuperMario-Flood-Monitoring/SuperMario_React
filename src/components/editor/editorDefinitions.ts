@@ -320,7 +320,7 @@ export const LEGACY_PIPE_KIND_TO_KIND: Record<string, EditorPipeKind> = {
 /** 관종별 파이프 색상 팔레트다. */
 export const PIPE_COLORS: Record<EditorWaterType, { fill: string; stroke: string; center: string; water: string }> = {
   storm: { fill: '#c7e3ff', stroke: '#0f5fc7', center: 'rgba(15, 95, 199, .32)', water: 'rgba(56, 189, 248, .50)' },
-  sewer: { fill: '#fff4e3', stroke: '#a4672b', center: 'rgba(164, 103, 43, .34)', water: 'rgba(180, 112, 42, .30)' },
+  sewer: { fill: '#fff4e3', stroke: '#5f3414', center: 'rgba(95, 52, 20, .42)', water: 'rgba(180, 112, 42, .30)' },
   combined: { fill: '#f5f1ff', stroke: '#7657d7', center: 'rgba(118, 87, 215, .34)', water: 'rgba(139, 92, 246, .28)' },
   overflow: { fill: '#e8d9d7', stroke: '#a54f4f', center: 'rgba(165, 79, 79, .34)', water: 'rgba(239, 68, 68, .26)' },
   treated: { fill: '#d4ded6', stroke: '#51936b', center: 'rgba(81, 147, 107, .34)', water: 'rgba(34, 197, 94, .25)' },
@@ -430,7 +430,7 @@ export const ENABLE_PARENT_CHILD_PROPAGATION_RULE = true
 export const ENABLE_REVERSE_PARENT_PROPAGATION_RULE = true
 
 /** 편집 패널 제어에서 사용하는 SWMM 엔진 URL이다. */
-export const SWMM_ENGINE_URL = import.meta.env.VITE_SWMM_ENGINE_URL ?? 'http://127.0.0.1:8765'
+export const SWMM_ENGINE_URL = import.meta.env.VITE_SWMM_ENGINE_URL ?? 'http://127.0.0.1:8000'
 
 /** attach-anchor resize 보호를 활성화할 수 있는 고정 branch root 타입이다. */
 export const ATTACH_ANCHOR_GUARD_FIXED_BRANCH_TYPES = new Set<EditorNodeType>([

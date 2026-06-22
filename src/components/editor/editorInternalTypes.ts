@@ -26,7 +26,9 @@ export interface DragState {
   offsetX: number
   offsetY: number
   groupNodeIds: string[]
+  groupNodeIdSet: ReadonlySet<string>
   originNodes: Record<string, Point>
+  hasFixedYNode: boolean
 }
 
 /** 사용자가 영역 선택 박스를 드래그하는 동안의 pointer 상태다. */
@@ -63,6 +65,8 @@ export interface ResizeState {
   originNode: EditorNode
   edgePointerOffset: number
   anchorBounds: ResizeAnchorBounds
+  childResizeEdge?: ResizeEdge | null
+  hasFixedYNode?: boolean
 }
 
 /** parent-to-child relation 업데이트 전파에 사용하는 context다. */
@@ -129,6 +133,7 @@ export interface LayoutHistoryState {
 /** layout 변경, batch, undo, redo를 처리하는 history reducer action이다. */
 export type LayoutHistoryAction =
   | { type: 'apply'; update: LayoutUpdate; recordHistory: boolean }
+  | { type: 'replace'; layout: EditorLayout }
   | { type: 'beginBatch' }
   | { type: 'commitBatch' }
   | { type: 'undo' }

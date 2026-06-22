@@ -1,5 +1,5 @@
 import type { EditorLayout } from '../../components/editor/editorTypes'
-import type { SwmmEngineControl, SwmmRealtimeSnapshot } from './client'
+import type { SwmmEngineControl, SwmmRealtimeSnapshot } from './dto'
 
 export interface SwmmRuntimeMappingLink {
   sourceEditorId?: string
@@ -48,8 +48,10 @@ export function clampPercent(value: unknown) {
   return Math.max(0, Math.min(100, numericControlValue(value)))
 }
 
+export const MAX_RAINFALL_PERCENT = 300
+
 export function clampRainfallPercent(value: unknown) {
-  return Math.max(0, Math.min(100000, numericControlValue(value)))
+  return Math.max(0, Math.min(MAX_RAINFALL_PERCENT, numericControlValue(value)))
 }
 
 export function buildSwmmRuntimeControl(

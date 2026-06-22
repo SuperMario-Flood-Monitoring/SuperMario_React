@@ -1,4 +1,5 @@
 import { EditorCanvas } from '../editor'
+import { InfoPanelToggleButton, type InfoPanelControls } from './InfoPanelLayout'
 import { SimulationWorkbench } from '../simulation/SimulationWorkbench'
 import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchTheme'
 import { useState } from 'react'
@@ -29,14 +30,23 @@ export function DrainageWorkbench() {
   const isDark = theme === 'dark'
   const themeTokens = WORKBENCH_THEME_TOKENS[theme]
 
-  return (
-    <main className={`min-h-screen min-w-0 overflow-x-hidden ${themeTokens.app}`}>
-      <header className={`flex min-w-0 flex-wrap items-center justify-between gap-3 border-b px-6 py-4 ${themeTokens.header}`}>
-        <div className="min-w-0">
-          <h1 className="text-xl font-black">도시침수 배수도 React 작업장</h1>
-          <p className={`mt-1 text-sm font-semibold ${themeTokens.description}`}>
-            {config.description}
-          </p>
+  const renderWorkbenchHeader = (infoPanelControls?: InfoPanelControls) => (
+      <header className={`flex min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-4 ${themeTokens.header}`}>
+        <div className="flex min-w-0 items-start gap-3">
+          {infoPanelControls && !infoPanelControls.isInfoPanelOpen ? (
+            <InfoPanelToggleButton
+              theme={theme}
+              isInfoPanelOpen={infoPanelControls.isInfoPanelOpen}
+              toggleInfoPanel={infoPanelControls.toggleInfoPanel}
+              className="mt-0.5"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <h1 className="text-xl font-black">도시침수 배수도 React 작업장</h1>
+            <p className={`mt-1 text-sm font-semibold ${themeTokens.description}`}>
+              {config.description}
+            </p>
+          </div>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <button
@@ -63,11 +73,14 @@ export function DrainageWorkbench() {
           ))}
         </div>
       </header>
+  )
 
+  return (
+    <main className={`min-h-screen min-w-0 overflow-x-hidden ${themeTokens.app}`}>
       {mode === 'editor' ? (
-        <EditorCanvas theme={theme} />
+        <EditorCanvas theme={theme} renderHeader={renderWorkbenchHeader} />
       ) : (
-        <SimulationWorkbench theme={theme} />
+        <SimulationWorkbench theme={theme} renderHeader={renderWorkbenchHeader} />
       )}
     </main>
   )

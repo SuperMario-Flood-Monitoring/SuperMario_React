@@ -1,95 +1,47 @@
 import type { EditorLayout } from '../../components/editor/editorTypes'
+import type {
+  EngineControlResponse,
+  EngineStartRequest,
+  SwmmEngineControl,
+  SwmmEngineStatus,
+  SwmmRuntimeStartResponse,
+  SwmmScenario,
+  SwmmScenarioDetailResponse,
+  SwmmScenarioListResponse,
+  SwmmScenarioSavePayload,
+} from './dto'
 
-export interface SwmmEngineControl {
-  rainfallRatio: number
-  blockagesById: Record<string, number>
-  maxRainfallMmPerHour?: number
-  speedMultiplier?: number
-}
-
-export interface SwmmEngineStatus {
-  ok: boolean
-  running: boolean
-  paused: boolean
-  hasSession: boolean
-  stepIndex: number
-  stepSeconds: number
-  modelTime: string | null
-  websocketClients: number
-  lastError: string | null
-  runId?: string | null
-  tickLogPath?: string | null
-  lastLogError?: string | null
-  control: {
-    rainfallRatio: number
-    rainfallPercent: number
-    blockagesById: Record<string, number>
-    maxRainfallMmPerHour: number
-    speedMultiplier: number
-  }
-}
-
-export interface SwmmRealtimeSnapshot {
-  type: string
-  ok: boolean
-  sourceOfTruth: 'SWMM'
-  runId?: string
-  tickLogPath?: string
-  source: string
-  modelPath: string
-  runtimeModelPath: string
-  modelTime: string | null
-  stepSeconds: number
-  stepIndex: number
-  control: SwmmEngineStatus['control']
-  nodes: Record<string, {
-    depthM: number
-    headM: number
-    invertElevationM: number
-    depthRatio: number
-    totalInflowCms: number
-    floodingCms: number
-  }>
-  links: Record<string, {
-    kind: string
-    flowCms: number
-    velocityMps: number
-    depthM: number
-    fullness: number
-    capacityCms: number
-    capacityRatio: number
-    direction: 'forward' | 'reverse'
-    targetSetting: number
-    currentSetting: number
-    blockageRatio: number
-  }>
-  editorObjects: Record<string, {
-    maxDepthRatio?: number
-    maxFullness?: number
-    maxCapacityRatio?: number
-    maxBlockageRatio?: number
-    maxFloodingCms?: number
-    flowCms?: number
-    maxVelocityMps?: number
-    totalInflowCms?: number
-  }>
-  summary: {
-    nodeCount: number
-    linkCount: number
-    rainfallTargetCount: number
-    blockageTargetCount: number
-    activeBlockageCount: number
-  }
-}
-
-export interface SwmmRuntimeStartResponse {
-  ok: boolean
-  running: boolean
-  status: SwmmEngineStatus
-  report: unknown
-  mapping: unknown
-  snapshot: SwmmRealtimeSnapshot
-}
+export type {
+  EditorConvertRequest,
+  EditorConvertResponse,
+  EngineControlRequest,
+  EngineControlResponse,
+  EngineResetRequest,
+  EngineStartRequest,
+  EngineStartResponse,
+  EngineStatusResponse,
+  ErrorResponse,
+  HealthResponse,
+  ScenarioCreateRequest,
+  ScenarioDetailResponse,
+  ScenarioListResponse,
+  ScenarioResponse,
+  ScenarioUpdateRequest,
+  SwmmEditorObjectState,
+  SwmmEngineControl,
+  SwmmEngineStatus,
+  SwmmLinkState,
+  SwmmNodeState,
+  SwmmRealtimeSnapshot,
+  SwmmRuntimeControlState,
+  SwmmRuntimeStartRequest,
+  SwmmRuntimeStartResponse,
+  SwmmScenario,
+  SwmmScenarioDetailResponse,
+  SwmmScenarioListResponse,
+  SwmmScenarioSavePayload,
+  SwmmSnapshotSummary,
+} from './dto'
 
 export function getSwmmWebSocketUrl(baseUrl: string) {
   const url = new URL(baseUrl)
@@ -122,21 +74,60 @@ export async function getSwmmEngineStatus(baseUrl: string): Promise<SwmmEngineSt
   return parseJsonResponse<SwmmEngineStatus>(response)
 }
 
+export async function getSwmmScenarios(baseUrl: string): Promise<SwmmScenario[]> {
+  const response = await fetch(`${baseUrl}/api/scenarios`)
+  const payload = await parseJsonResponse<SwmmScenarioListResponse>(response)
+  return payload.scenarios
+}
+
+export async function createSwmmScenario(
+  baseUrl: string,
+  payload: SwmmScenarioSavePayload,
+): Promise<SwmmScenario> {
+  const response = await fetch(`${baseUrl}/api/scenarios`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+  const result = await parseJsonResponse<SwmmScenarioDetailResponse>(response)
+  return result.scenario
+}
+
+export async function updateSwmmScenario(
+  baseUrl: string,
+  scenarioId: number,
+  payload: Partial<SwmmScenarioSavePayload>,
+): Promise<SwmmScenario> {
+  const response = await fetch(`${baseUrl}/api/scenarios/${scenarioId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+  const result = await parseJsonResponse<SwmmScenarioDetailResponse>(response)
+  return result.scenario
+}
+
 export async function startSwmmEngine(
   baseUrl: string,
   layout: EditorLayout,
   control: SwmmEngineControl,
 ): Promise<SwmmRuntimeStartResponse> {
+  const body: EngineStartRequest = {
+    layout,
+    stepSeconds: 1,
+    maxRainfallMmPerHour: control.maxRainfallMmPerHour,
+    control,
+  }
   const response = await fetch(`${baseUrl}/engine/start`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      layout,
-      stepSeconds: 1,
-      control,
-    }),
+    body: JSON.stringify(body),
   })
   return parseJsonResponse<SwmmRuntimeStartResponse>(response)
 }
@@ -161,16 +152,18 @@ export async function resetSwmmEngine(
   layout: EditorLayout,
   control: SwmmEngineControl,
 ): Promise<SwmmRuntimeStartResponse> {
+  const body: EngineStartRequest = {
+    layout,
+    stepSeconds: 1,
+    maxRainfallMmPerHour: control.maxRainfallMmPerHour,
+    control,
+  }
   const response = await fetch(`${baseUrl}/engine/reset`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      layout,
-      stepSeconds: 1,
-      control,
-    }),
+    body: JSON.stringify(body),
   })
   return parseJsonResponse<SwmmRuntimeStartResponse>(response)
 }
@@ -178,7 +171,7 @@ export async function resetSwmmEngine(
 export async function updateSwmmEngineControl(
   baseUrl: string,
   control: SwmmEngineControl,
-): Promise<{ ok: boolean; control: SwmmEngineStatus['control']; snapshot: SwmmRealtimeSnapshot }> {
+): Promise<EngineControlResponse> {
   const response = await fetch(`${baseUrl}/engine/control`, {
     method: 'POST',
     headers: {

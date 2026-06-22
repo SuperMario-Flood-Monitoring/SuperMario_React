@@ -1,5 +1,5 @@
 import type { EditorEndpoint, EditorLayout, EditorLink, EditorNode } from '../editor/editorTypes'
-import { useState, type ReactNode } from 'react'
+import { memo, useMemo, useState, type ReactNode } from 'react'
 import { PIPE_BORDER, PIPE_KIND_DEFINITIONS } from '../editor/editorDefinitions'
 import {
   getAttachedPortPoint,
@@ -18,6 +18,7 @@ import {
   getTeeConnectorGeometry,
 } from '../editor/editorNodeHelpers'
 import type { SwmmRealtimeSnapshot } from '../../services/swmm/client'
+import { SoilBackground } from '../diagram/SoilBackground'
 
 export interface SimulationBlockageTarget {
   swmmLinkId: string
@@ -37,6 +38,7 @@ interface SimulationLayoutPreviewProps {
   selectedBlockageId: string
   blockageTargets: SimulationBlockageTarget[]
   fullscreenControlBar?: ReactNode
+  fullscreenInfoPanel?: ReactNode
   onToggleFullscreen?: () => void
   onSelectPreviewNode?: (nodeId: string) => void
   onSelectBlockageTarget: (swmmLinkId: string) => void
@@ -72,7 +74,6 @@ const OVERFLOW_GATE_OPEN_RATIO = 0.5
 const OVERFLOW_GATE_PREVIEW_ANIMATION = false
 const MANHOLE_CONNECTED_FILL_MIN = 0.03
 const FULLSCREEN_ZOOM_MIN = 0.5
-const FULLSCREEN_ZOOM_MAX = 3
 const FULLSCREEN_ZOOM_STEP = 0.25
 const FLOOD_WARNING_CMS_THRESHOLD = 0.0005
 
@@ -91,7 +92,7 @@ function clamp01(value: number | undefined) {
 }
 
 function clampFullscreenZoom(value: number) {
-  return Math.max(FULLSCREEN_ZOOM_MIN, Math.min(FULLSCREEN_ZOOM_MAX, value))
+  return Math.max(FULLSCREEN_ZOOM_MIN, value)
 }
 
 function safeSvgId(value: string) {
@@ -498,7 +499,7 @@ function ObjectRuntimeBadge({
           <path d="M12 0 L24 22 H0 Z" fill="#fee2e2" stroke="#ef4444" strokeWidth="2">
             <animate attributeName="opacity" values="1;.45;1" dur={`${animationDuration(0.8, animationSpeedMultiplier)}s`} repeatCount="indefinite" />
           </path>
-          <text x="12" y="17" textAnchor="middle" className="select-none text-[13px] font-black" fill="#b91c1c">!</text>
+          <text x="12" y="18" textAnchor="middle" className="select-none text-[15px] font-black" fill="#b91c1c">!</text>
         </g>
       ) : null}
       <rect width="50" height="22" rx="11" fill={hasBlockage ? '#fff1f2' : '#eff6ff'} stroke={hasBlockage ? '#fb7185' : '#60a5fa'} strokeWidth="2" />
@@ -506,7 +507,7 @@ function ObjectRuntimeBadge({
         x="25"
         y="15"
         textAnchor="middle"
-        className="select-none text-[10px] font-black"
+        className="select-none text-[12px] font-black"
         fill={hasBlockage ? '#be123c' : '#1d4ed8'}
       >
         {hasBlockage ? formatBadgePercent(blockageRatio) : formatBadgePercent(fullnessRatio)}
@@ -548,13 +549,13 @@ function NodeLabel({ node, y }: { node: EditorNode; y?: number }) {
   return (
     <text
       x={node.width / 2}
-      y={y ?? node.height / 2 + 7}
+      y={y ?? node.height / 2 + 8}
       textAnchor="middle"
-      className="select-none text-[15px] font-black"
+      className="select-none text-[20px] font-black"
       fill="#0f172a"
       paintOrder="stroke"
       stroke="white"
-      strokeWidth="5"
+      strokeWidth="6"
       pointerEvents="none"
     >
       {node.name}
@@ -565,19 +566,31 @@ function NodeLabel({ node, y }: { node: EditorNode; y?: number }) {
 function RuntimeOutline({ node, state, selected }: { node: EditorNode; state?: RuntimeObjectState; selected: boolean }) {
   if (isConnectorNode(node)) {
     return selected ? (
-      <rect
-        x="-5"
-        y="-5"
-        width={node.width + 10}
-        height={node.height + 10}
-        rx="10"
-        fill="none"
-        stroke="#2563eb"
-        strokeWidth="4"
-        strokeDasharray="9 7"
-        opacity="0.9"
-        pointerEvents="none"
-      />
+      <g pointerEvents="none">
+        <rect
+          x="-8"
+          y="-8"
+          width={node.width + 16}
+          height={node.height + 16}
+          rx="12"
+          fill="none"
+          stroke="#fb923c"
+          strokeWidth="9"
+          opacity="0.32"
+          filter="url(#selected-glow)"
+        />
+        <rect
+          x="-5"
+          y="-5"
+          width={node.width + 10}
+          height={node.height + 10}
+          rx="10"
+          fill="none"
+          stroke="#ea580c"
+          strokeWidth="5"
+          opacity="0.98"
+        />
+      </g>
     ) : null
   }
 
@@ -588,11 +601,25 @@ function RuntimeOutline({ node, state, selected }: { node: EditorNode; state?: R
   if (!selected && blockage <= 0.01 && !riskStroke && !flooded) {
     return null
   }
-  const stroke = selected ? '#2563eb' : riskStroke ?? (flooded ? '#ef4444' : '#ef4444')
+  const stroke = selected ? '#ea580c' : riskStroke ?? (flooded ? '#ef4444' : '#ef4444')
   const urgent = getFillRiskLevel(fillRatio) >= 4
 
   return (
     <g pointerEvents="none">
+      {selected ? (
+        <rect
+          x="-10"
+          y="-10"
+          width={node.width + 20}
+          height={node.height + 20}
+          rx="14"
+          fill="none"
+          stroke="#fb923c"
+          strokeWidth="11"
+          opacity="0.34"
+          filter="url(#selected-glow)"
+        />
+      ) : null}
       {urgent && !selected ? (
         <rect
           x="-12"
@@ -617,9 +644,8 @@ function RuntimeOutline({ node, state, selected }: { node: EditorNode; state?: R
         rx="10"
         fill="none"
         stroke={stroke}
-        strokeWidth={selected ? 4 : Math.max(3, 3 + Math.max(blockage, getFillRiskLevel(fillRatio) / 4) * 6)}
-        strokeDasharray={selected ? '9 7' : undefined}
-        opacity={selected ? 0.9 : 0.42 + Math.max(blockage, getFillRiskLevel(fillRatio) / 4) * 0.45}
+        strokeWidth={selected ? 6 : Math.max(3, 3 + Math.max(blockage, getFillRiskLevel(fillRatio) / 4) * 6)}
+        opacity={selected ? 0.98 : 0.42 + Math.max(blockage, getFillRiskLevel(fillRatio) / 4) * 0.45}
       >
         {urgent ? <animate attributeName="opacity" values=".35;1;.35" dur="0.9s" repeatCount="indefinite" /> : null}
       </rect>
@@ -1206,8 +1232,8 @@ function FacilityNode({
               />
             </g>
           </g>
-          <text x={overflowInnerX + 64} y={overflowInnerY + overflowInnerHeight - 20} textAnchor="middle" className="select-none text-[11px] font-black" fill="#334155">일반 유량</text>
-          <text x={node.width - 74} y={overflowInnerY + overflowInnerHeight - 42} textAnchor="middle" className="select-none text-[11px] font-black" fill="#334155">폭우 초과분</text>
+          <text x={overflowInnerX + 64} y={overflowInnerY + overflowInnerHeight - 20} textAnchor="middle" className="select-none text-[13px] font-black" fill="#334155">일반 유량</text>
+          <text x={node.width - 74} y={overflowInnerY + overflowInnerHeight - 42} textAnchor="middle" className="select-none text-[13px] font-black" fill="#334155">폭우 초과분</text>
         </>
       ) : facilityKind === 'stormPumpStation' ? (
         <>
@@ -1264,7 +1290,27 @@ function FacilityNode({
   )
 }
 
-function SimulationNode({
+function areRuntimeStatesEquivalent(first?: RuntimeObjectState, second?: RuntimeObjectState) {
+  if (first === second) {
+    return true
+  }
+  if (!first || !second) {
+    return false
+  }
+
+  return (
+    first.flowCms === second.flowCms &&
+    first.maxVelocityMps === second.maxVelocityMps &&
+    first.maxFullness === second.maxFullness &&
+    first.maxDepthRatio === second.maxDepthRatio &&
+    first.maxBlockageRatio === second.maxBlockageRatio &&
+    first.maxCapacityRatio === second.maxCapacityRatio &&
+    first.maxFloodingCms === second.maxFloodingCms &&
+    first.totalInflowCms === second.totalInflowCms
+  )
+}
+
+const SimulationNode = memo(function SimulationNode({
   node,
   state,
   selected,
@@ -1307,9 +1353,17 @@ function SimulationNode({
       <RuntimeOutline node={node} state={state} selected={selected} />
     </g>
   )
-}
+}, (previous, next) => (
+  previous.node === next.node &&
+  previous.selected === next.selected &&
+  previous.targetSwmmId === next.targetSwmmId &&
+  previous.animationSpeedMultiplier === next.animationSpeedMultiplier &&
+  previous.onSelectPreviewNode === next.onSelectPreviewNode &&
+  previous.onSelectBlockageTarget === next.onSelectBlockageTarget &&
+  areRuntimeStatesEquivalent(previous.state, next.state)
+))
 
-function RelationGuide({ layout, link }: { layout: EditorLayout; link: EditorLink }) {
+const RelationGuide = memo(function RelationGuide({ layout, link }: { layout: EditorLayout; link: EditorLink }) {
   if (link.type !== 'relation') {
     return null
   }
@@ -1333,7 +1387,7 @@ function RelationGuide({ layout, link }: { layout: EditorLayout; link: EditorLin
       pointerEvents="none"
     />
   )
-}
+})
 
 function RainOverlay({
   bounds,
@@ -1391,42 +1445,45 @@ export function SimulationLayoutPreview({
   selectedBlockageId,
   blockageTargets,
   fullscreenControlBar,
+  fullscreenInfoPanel,
   onToggleFullscreen,
   onSelectPreviewNode,
   onSelectBlockageTarget,
 }: SimulationLayoutPreviewProps) {
   const [fullscreenZoom, setFullscreenZoom] = useState(1)
   const isDark = theme === 'dark'
-  const bounds = computeViewBounds(layout)
+  const bounds = useMemo(() => computeViewBounds(layout), [layout])
   const svgWidth = Math.max(960, bounds.width)
   const svgHeight = bounds.height
   const previewMaxHeight = Math.max(360, Math.min(680, svgHeight * PREVIEW_SCALE))
   const fullscreenZoomPercent = Math.round(fullscreenZoom * 100)
   const selectedEditorId = getSelectedEditorId(selectedBlockageId, blockageTargets)
-  const sortedNodes = [...layout.nodes].sort((first, second) => {
-    const layerDelta = getNodeLayer(first) - getNodeLayer(second)
-    if (layerDelta !== 0) {
-      return layerDelta
-    }
+  const sortedNodes = useMemo(() => {
+    const nodeIndex = new Map(layout.nodes.map((node, index) => [node.id, index]))
+    return [...layout.nodes].sort((first, second) => {
+      const layerDelta = getNodeLayer(first) - getNodeLayer(second)
+      if (layerDelta !== 0) {
+        return layerDelta
+      }
 
-    const zDelta = getNodeZOrder(first) - getNodeZOrder(second)
-    if (zDelta !== 0) {
-      return zDelta
-    }
+      const zDelta = getNodeZOrder(first) - getNodeZOrder(second)
+      if (zDelta !== 0) {
+        return zDelta
+      }
 
-    return layout.nodes.indexOf(first) - layout.nodes.indexOf(second)
-  })
+      return (nodeIndex.get(first.id) ?? 0) - (nodeIndex.get(second.id) ?? 0)
+    })
+  }, [layout.nodes])
 
   return (
     <div className={isFullscreen
       ? `fixed inset-0 z-[90] flex flex-col p-4 ${isDark ? 'bg-slate-950' : 'bg-slate-100'}`
       : `mt-5 rounded-md border p-3 ${isDark ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'}`
     }>
-      {isFullscreen && fullscreenControlBar ? (
-        <div className="mb-3">
-          {fullscreenControlBar}
-        </div>
-      ) : null}
+      {isFullscreen ? fullscreenControlBar : null}
+      <div className={isFullscreen ? 'flex min-h-0 flex-1' : ''}>
+      {isFullscreen ? fullscreenInfoPanel : null}
+      <div className={isFullscreen ? 'flex min-w-0 flex-1 flex-col' : ''}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className={`text-sm font-black ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>편집 JSON 런타임 뷰</h3>
@@ -1487,8 +1544,7 @@ export function SimulationLayoutPreview({
                 <button
                   type="button"
                   onClick={() => setFullscreenZoom((current) => clampFullscreenZoom(current + FULLSCREEN_ZOOM_STEP))}
-                  className="rounded-md px-3 py-2 hover:bg-white/12 disabled:cursor-not-allowed disabled:text-slate-500"
-                  disabled={fullscreenZoom >= FULLSCREEN_ZOOM_MAX}
+                  className="rounded-md px-3 py-2 hover:bg-white/12"
                 >
                   확대
                 </button>
@@ -1518,17 +1574,19 @@ export function SimulationLayoutPreview({
                 <filter id="urgent-glow" x="-50%" y="-50%" width="200%" height="200%">
                   <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#ef4444" floodOpacity="0.9" />
                 </filter>
+                <filter id="selected-glow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="#f97316" floodOpacity="0.95" />
+                  <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#7c2d12" floodOpacity="0.5" />
+                </filter>
               </defs>
-              <rect x={bounds.minX} y={bounds.minY} width={svgWidth} height={svgHeight} fill="#e8f5ff" />
-              <rect
-                x={bounds.minX}
-                y={layout.groundSurfaceY}
+              <SoilBackground
+                minX={bounds.minX}
+                topY={layout.groundSurfaceY}
                 width={Math.max(960, bounds.width)}
                 height={bounds.maxY - layout.groundSurfaceY}
-                fill="#a86435"
-                opacity="0.16"
+                skyY={bounds.minY}
+                skyHeight={layout.groundSurfaceY - bounds.minY}
               />
-              <line x1={bounds.minX} y1={layout.groundSurfaceY} x2={bounds.maxX} y2={layout.groundSurfaceY} stroke="#7c4a26" strokeWidth="4" />
               {layout.links.map((link) => <RelationGuide key={link.id} layout={layout} link={link} />)}
               {sortedNodes.map((node) => (
                 <UpstreamPipeExtension
@@ -1563,6 +1621,8 @@ export function SimulationLayoutPreview({
             </svg>
           </div>
         </div>
+      </div>
+      </div>
       </div>
     </div>
   )
