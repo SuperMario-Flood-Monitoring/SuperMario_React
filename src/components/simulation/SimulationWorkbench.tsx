@@ -907,7 +907,7 @@ export function SimulationWorkbench({
     </>
   )
   const renderControlBar = (leadingControl?: ReactNode) => (
-    <div className={`sticky top-0 z-30 -mx-4 mb-4 min-w-0 border-b px-4 py-3 shadow-sm backdrop-blur ${themeTokens.controlBar}`}>
+    <div className={`-mx-4 -mt-4 mb-4 min-w-0 border-b px-4 py-3 shadow-sm ${themeTokens.controlBar}`}>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         {leadingControl}
         <button
@@ -948,7 +948,7 @@ export function SimulationWorkbench({
         >
           초기화
         </button>
-        <label className={`flex min-w-[180px] flex-[1_1_240px] items-center gap-2 rounded-md border px-3 py-2 ${themeTokens.panelMuted}`}>
+        <label className={`flex min-w-[220px] flex-[1_1_420px] items-center gap-2 rounded-md border px-3 py-2 ${themeTokens.panelMuted}`}>
           <span className={`shrink-0 text-xs font-black ${isDark ? 'text-slate-300' : 'text-slate-500'}`}>강수</span>
           <input
             type="range"
@@ -958,7 +958,7 @@ export function SimulationWorkbench({
             onChange={(event) => setRainfallPercent(clampRainfallPercent(event.target.value))}
             className="min-w-0 flex-1 accent-blue-600"
           />
-          <span className="w-20 shrink-0 text-right text-xs font-black text-blue-700">
+          <span className="w-10 shrink-0 text-right text-xs font-black text-blue-700">
             {Math.round(rainfallPercent)}%
           </span>
         </label>
