@@ -429,8 +429,8 @@ export const ENABLE_PARENT_CHILD_PROPAGATION_RULE = true
 /** 다중 parent를 가진 child endpoint의 역방향 보정을 켜는 스위치다. */
 export const ENABLE_REVERSE_PARENT_PROPAGATION_RULE = true
 
-/** 편집 패널 제어에서 사용하는 SWMM 엔진 URL이다. */
-export const SWMM_ENGINE_URL = import.meta.env.VITE_SWMM_ENGINE_URL ?? 'http://127.0.0.1:8000'
+/** 편집 패널 제어에서 사용하는 SWMM 엔진 API base URL이다. */
+export const SWMM_ENGINE_URL = import.meta.env.VITE_SWMM_ENGINE_URL ?? '/api'
 
 /** attach-anchor resize 보호를 활성화할 수 있는 고정 branch root 타입이다. */
 export const ATTACH_ANCHOR_GUARD_FIXED_BRANCH_TYPES = new Set<EditorNodeType>([

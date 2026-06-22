@@ -47,10 +47,16 @@ export type {
   SwmmSnapshotSummary,
 } from './dto'
 
+export function joinSwmmApiUrl(baseUrl: string, path: string) {
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, '')
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${normalizedBaseUrl}${normalizedPath}`
+}
+
 export function getSwmmWebSocketUrl(baseUrl: string) {
-  const url = new URL(baseUrl)
+  const url = new URL(baseUrl || '/', window.location.origin)
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-  url.pathname = '/ws/simulation'
+  url.pathname = joinSwmmApiUrl(url.pathname, '/ws/simulation')
   url.search = ''
   url.hash = ''
   return url.toString()
@@ -74,12 +80,12 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getSwmmEngineStatus(baseUrl: string): Promise<SwmmEngineStatus> {
-  const response = await fetch(`${baseUrl}/engine/status`)
+  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/status'))
   return parseJsonResponse<SwmmEngineStatus>(response)
 }
 
 export async function getSwmmScenarios(baseUrl: string): Promise<SwmmScenario[]> {
-  const response = await fetch(`${baseUrl}/api/scenarios`)
+  const response = await fetch(joinSwmmApiUrl(baseUrl, '/scenarios'))
   const payload = await parseJsonResponse<SwmmScenarioListResponse>(response)
   return payload.scenarios
 }
@@ -88,7 +94,7 @@ export async function createSwmmScenario(
   baseUrl: string,
   payload: SwmmScenarioSavePayload,
 ): Promise<SwmmScenario> {
-  const response = await fetch(`${baseUrl}/api/scenarios`, {
+  const response = await fetch(joinSwmmApiUrl(baseUrl, '/scenarios'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -104,7 +110,7 @@ export async function updateSwmmScenario(
   scenarioId: number,
   payload: Partial<SwmmScenarioSavePayload>,
 ): Promise<SwmmScenario> {
-  const response = await fetch(`${baseUrl}/api/scenarios/${scenarioId}`, {
+  const response = await fetch(joinSwmmApiUrl(baseUrl, `/scenarios/${scenarioId}`), {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -126,7 +132,7 @@ export async function startSwmmEngine(
     maxRainfallMmPerHour: control.maxRainfallMmPerHour,
     control,
   }
-  const response = await fetch(`${baseUrl}/engine/start`, {
+  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/start'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -137,17 +143,17 @@ export async function startSwmmEngine(
 }
 
 export async function stopSwmmEngine(baseUrl: string): Promise<SwmmEngineStatus> {
-  const response = await fetch(`${baseUrl}/engine/stop`, { method: 'POST' })
+  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/stop'), { method: 'POST' })
   return parseJsonResponse<SwmmEngineStatus>(response)
 }
 
 export async function pauseSwmmEngine(baseUrl: string): Promise<SwmmEngineStatus> {
-  const response = await fetch(`${baseUrl}/engine/pause`, { method: 'POST' })
+  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/pause'), { method: 'POST' })
   return parseJsonResponse<SwmmEngineStatus>(response)
 }
 
 export async function resumeSwmmEngine(baseUrl: string): Promise<SwmmEngineStatus> {
-  const response = await fetch(`${baseUrl}/engine/resume`, { method: 'POST' })
+  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/resume'), { method: 'POST' })
   return parseJsonResponse<SwmmEngineStatus>(response)
 }
 
@@ -162,7 +168,7 @@ export async function resetSwmmEngine(
     maxRainfallMmPerHour: control.maxRainfallMmPerHour,
     control,
   }
-  const response = await fetch(`${baseUrl}/engine/reset`, {
+  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/reset'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -176,7 +182,7 @@ export async function updateSwmmEngineControl(
   baseUrl: string,
   control: SwmmEngineControl,
 ): Promise<EngineControlResponse> {
-  const response = await fetch(`${baseUrl}/engine/control`, {
+  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/control'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

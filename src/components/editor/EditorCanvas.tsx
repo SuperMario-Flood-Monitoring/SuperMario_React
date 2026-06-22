@@ -131,6 +131,7 @@ import { EditableNodeLayer } from './EditableNodeLayer'
 import {
   createSwmmScenario,
   getSwmmScenarios,
+  joinSwmmApiUrl,
   updateSwmmScenario,
   type SwmmScenario,
 } from '../../services/swmm/client'
@@ -2684,7 +2685,7 @@ function parseWarningHeader(value: string | null): string[] {
 /** 현재 layout을 서버에 전달해 SWMM INP 텍스트로 변환한 뒤 다운로드한다. */
 async function downloadSwmmInp(layout: EditorLayout) {
   const exportLayout = normalizeRelationAttachments(layout)
-  const response = await fetch(`${SWMM_ENGINE_URL}/editor/export-inp`, {
+  const response = await fetch(joinSwmmApiUrl(SWMM_ENGINE_URL, '/editor/export-inp'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
