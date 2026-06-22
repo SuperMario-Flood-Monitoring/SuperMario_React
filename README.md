@@ -39,9 +39,9 @@ React 편집모드
 
 React 시뮬레이션모드
   -> 저장된 시나리오 선택
-  -> /engine/start 로 layout + control 전달
+  -> /api/engine/start 로 layout + control 전달
   -> Django가 SWMM 엔진 세션 시작
-  -> WebSocket /ws/simulation 으로 tick snapshot 수신
+  -> WebSocket /api/ws/simulation 으로 tick snapshot 수신
   -> React가 runtime 값을 배수도 위에 렌더링
 ```
 
@@ -136,12 +136,19 @@ npm run lint
 
 이 레포에는 백엔드 코드가 포함되어 있지 않습니다. 시나리오 저장, SWMM 엔진 실행, WebSocket tick 수신은 별도 Django/SWMM 서버가 필요합니다.
 
-기본 서버 주소는 `http://127.0.0.1:8000`이며, 환경 변수로 변경할 수 있습니다.
+Vite mode에 따라 API base URL이 자동으로 바뀝니다.
 
+| 실행 모드 | 파일 | 기본값 |
+| --- | --- | --- |
+| local 개발 | `.env.development` | `VITE_SWMM_ENGINE_URL=http://127.0.0.1:8000/api` |
+| prod 빌드 | `.env.production` | `VITE_SWMM_ENGINE_URL=/api` |
 
 ```bash
-VITE_SWMM_ENGINE_URL=http://127.0.0.1:8000
+npm run dev
+npm run build
 ```
+
+개인 로컬 값은 `.env.local` 또는 `.env.development.local`에 넣으면 되고, 이 파일들은 Git에 올리지 않습니다.
 
 백엔드 API 상세 설명은 Django 프로젝트 README에서 관리합니다.
 
