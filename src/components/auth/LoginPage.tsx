@@ -35,13 +35,13 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50">
       <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[minmax(420px,0.78fr)_1fr]">
-        <section className="relative flex min-h-[360px] flex-col justify-between overflow-hidden border-b border-white/10 bg-[#08131f] p-8 lg:min-h-screen lg:border-b-0 lg:border-r">
+        <section className="relative flex min-h-[104px] flex-col justify-center overflow-hidden border-b border-white/10 bg-[#08131f] px-5 py-5 lg:min-h-screen lg:justify-between lg:border-b-0 lg:border-r lg:p-8">
           <div className="absolute inset-0 bg-[#08131f]/55" />
-          <div className="relative z-10">
+          <div className="relative z-10 hidden lg:block">
             <p className="text-xs font-black uppercase text-sky-200">SuperMario</p>
             <p className="text-sm font-bold text-slate-300">Urban Drainage Control</p>
           </div>
-          <div className="relative z-10 mx-auto my-10 flex w-full max-w-[420px] justify-center">
+          <div className="relative z-10 mx-auto my-10 hidden w-full max-w-[420px] justify-center lg:flex">
             <img
               src={logoImage}
               alt="수퍼마리오 로고"
@@ -49,16 +49,17 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             />
           </div>
           <div className="relative z-10 max-w-xl">
-            <h1 className="text-4xl font-black leading-tight text-white sm:text-5xl">
+            <div className="mb-3 h-1 w-10 rounded-full bg-sky-300 lg:hidden" />
+            <h1 className="text-2xl font-black leading-tight text-white sm:text-3xl lg:text-4xl xl:text-5xl">
               도시침수 배수도 작업장
             </h1>
-            <p className="mt-4 text-base font-semibold leading-7 text-slate-300">
+            <p className="mt-4 hidden text-base font-semibold leading-7 text-slate-300 lg:block">
               도시 배수망을 편집하고 SWMM 시뮬레이션으로 실시간 침수 흐름을 확인합니다.
             </p>
           </div>
         </section>
 
-        <section className="flex min-h-screen items-center justify-center bg-slate-100 px-5 py-10 text-slate-950">
+        <section className="flex min-h-[calc(100vh-104px)] items-start justify-center bg-slate-100 px-5 py-8 text-slate-950 lg:min-h-screen lg:items-center lg:py-10">
           <form
             onSubmit={handleSubmit}
             className="w-full max-w-[430px] rounded-lg border border-slate-200 bg-white p-6 shadow-[0_20px_48px_rgba(15,23,42,0.12)]"
