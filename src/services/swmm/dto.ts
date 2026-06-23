@@ -124,6 +124,7 @@ export interface SwmmRiskPayload {
   summary: Record<string, unknown>
   validation: Record<string, unknown>
   counters?: Record<string, unknown>
+  policy?: Record<string, unknown>
 }
 
 export interface SwmmLlmTriggerPayload {

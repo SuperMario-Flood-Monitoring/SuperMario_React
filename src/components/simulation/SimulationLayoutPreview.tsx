@@ -1,6 +1,7 @@
 import type { EditorEndpoint, EditorLayout, EditorLink, EditorNode } from '../editor/editorTypes'
 import { memo, useMemo, useState, type ReactNode } from 'react'
-import { PIPE_BORDER, PIPE_KIND_DEFINITIONS } from '../editor/editorDefinitions'
+import { CANVAS_BOTTOM_PADDING, CANVAS_RIGHT_PADDING, PIPE_BORDER, PIPE_KIND_DEFINITIONS } from '../editor/editorDefinitions'
+import { EDITOR_CANVAS_HEIGHT, EDITOR_CANVAS_WIDTH } from '../editor/defaultLayout'
 import {
   getAttachedPortPoint,
   getElbowConnectorGeometry,
@@ -40,7 +41,8 @@ interface SimulationLayoutPreviewProps {
   fullscreenControlBar?: ReactNode
   fullscreenInfoPanel?: ReactNode
   onToggleFullscreen?: () => void
-  onSelectPreviewNode?: (nodeId: string) => void
+  onClearSelection?: () => void
+  onSelectPreviewNode?: (nodeId: string, targetSwmmId?: string) => void
   onSelectBlockageTarget: (swmmLinkId: string) => void
 }
 
@@ -56,16 +58,21 @@ interface ViewBounds {
   height: number
 }
 
-const PREVIEW_PADDING = 120
+interface LocalVisualBounds {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+}
+
 const MIN_PREVIEW_HEIGHT = 560
 const FLOW_ACTIVE_SPEED_THRESHOLD = 0.001
 const FLOW_ACTIVE_CMS_THRESHOLD = 0.00005
-const FLOW_REVERSE_CMS_THRESHOLD = 0.02
+const DEFAULT_FLOW_REVERSE_CMS_THRESHOLD = 0.005
 const FLOW_ARROW_SPACING = 104
 const MAX_FLOW_ARROW_COUNT = 48
 const UPSTREAM_EXTENSION_OVERLAP = 10
 const PREVIEW_SCALE = 0.5
-const BADGE_ACTIVITY_FLOW_THRESHOLD = 0.002
 const FACILITY_VISIBLE_FILL_THRESHOLD = 0.001
 const STORM_PUMP_START_RATIO = 0.6
 const STORM_PUMP_ACTIVE_FLOW_THRESHOLD_CMS = 0.02
@@ -77,6 +84,9 @@ const MANHOLE_CONNECTED_FILL_MIN = 0.03
 const FULLSCREEN_ZOOM_MIN = 0.5
 const FULLSCREEN_ZOOM_STEP = 0.25
 const FLOOD_WARNING_CMS_THRESHOLD = 0.0005
+const OBJECT_NAME_BADGE_HEIGHT = 23
+const OBJECT_PERCENT_BADGE_HEIGHT = 16
+const OBJECT_LABEL_ROW_GAP = 8
 
 const WATER_TYPE_LEGEND = PIPE_KIND_DEFINITIONS.map((definition) => ({
   ...definition,
@@ -101,6 +111,14 @@ function clampFullscreenZoom(value: number) {
 /** SVG clipPath/filter id로 안전하게 사용할 수 있는 문자열로 변환한다. */
 function safeSvgId(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, '_')
+}
+
+/** Django risk policy의 의미 있는 역류 기준을 React 흐름 방향 기준으로 그대로 사용한다. */
+function getReverseFlowThreshold(snapshot: SwmmRealtimeSnapshot | null) {
+  const value = snapshot?.risk?.policy?.reverseFlowMinAbsCms
+  const parsed = typeof value === 'number' ? value : Number(value)
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_FLOW_REVERSE_CMS_THRESHOLD
 }
 
 /** 관 만관율과 노드 수위율 중 화면에 더 위험하게 보이는 값을 runtime 채움 비율로 사용한다. */
@@ -227,6 +245,186 @@ function isConnectorNode(node: EditorNode) {
   return node.type === 'connector' || node.type === 'elbowConnector' || node.type === 'teeConnector'
 }
 
+function isPipeLabelNode(node: EditorNode) {
+  return node.type === 'pipeSegment'
+}
+
+function shouldRenderObjectLabel(node: EditorNode) {
+  return node.name.trim().length > 0 && !isConnectorNode(node)
+}
+
+function getObjectLabelWidth(name: string) {
+  const weightedLength = Array.from(name).reduce((sum, char) => {
+    if (/[가-힣]/.test(char)) return sum + 1.08
+    if (char === ' ') return sum + 0.35
+    return sum + 0.72
+  }, 0)
+
+  return Math.max(56, Math.min(280, weightedLength * 14 + 18))
+}
+
+function getObjectStatusPercent(node: EditorNode, state: RuntimeObjectState | undefined) {
+  if (!state || node.type === 'road') {
+    return null
+  }
+
+  const fullnessRatio = getNodeBadgeRatio(node, state)
+  const blockageRatio = clamp01(state.maxBlockageRatio)
+  const hasBlockage = blockageRatio > 0
+
+  return {
+    text: formatBadgePercent(hasBlockage ? blockageRatio : fullnessRatio),
+    hasBlockage,
+  }
+}
+
+function getObjectInfoLabelWidth(name: string, percentText: string | null) {
+  const nameWidth = getObjectLabelWidth(name)
+  if (!percentText) {
+    return nameWidth
+  }
+
+  const percentWidth = Math.max(48, percentText.length * 8 + 18)
+  return Math.max(96, Math.min(320, Math.max(nameWidth, percentWidth + 20)))
+}
+
+function getObjectInfoLabelHeight(hasPercent: boolean) {
+  return hasPercent
+    ? OBJECT_NAME_BADGE_HEIGHT + OBJECT_LABEL_ROW_GAP + OBJECT_PERCENT_BADGE_HEIGHT
+    : OBJECT_NAME_BADGE_HEIGHT
+}
+
+function getObjectLabelPalette(node: EditorNode) {
+  if (isPipeLabelNode(node)) {
+    const palette = getPipePalette(getNodePipeKind(node))
+    return { fill: palette.fill, stroke: palette.stroke, text: '#0f172a' }
+  }
+
+  if (node.type === 'facility') {
+    const definition = getNodeFacilityDefinition(node)
+    const palette = getPipePalette(definition.waterKind)
+    return { fill: palette.fill, stroke: definition.stroke, text: '#0f172a' }
+  }
+
+  if (node.type === 'outfall') {
+    const definition = getNodeOutfallDefinition(node)
+    const palette = getPipePalette(definition.waterKind)
+    return { fill: palette.fill, stroke: definition.stroke, text: '#0f172a' }
+  }
+
+  if (node.type === 'catchBasin') {
+    const palette = getPipePalette('storm')
+    return { fill: palette.fill, stroke: palette.stroke, text: '#0f172a' }
+  }
+
+  if (node.type === 'manhole') {
+    const definition = getNodeManholeDefinition(node)
+    const palette = getPipePalette(definition.waterKind)
+    return { fill: palette.fill, stroke: definition.stroke, text: '#0f172a' }
+  }
+
+  if (node.type === 'terrain') {
+    const definition = getNodeTerrainDefinition(node)
+    return { fill: definition.fill, stroke: definition.stroke, text: '#0f172a' }
+  }
+
+  if (node.type === 'road') {
+    return { fill: '#111827', stroke: '#facc15', text: '#f8fafc' }
+  }
+
+  if (node.type === 'apartment') {
+    return { fill: '#e0f2fe', stroke: '#0f5fc7', text: '#0f172a' }
+  }
+
+  if (node.type === 'house') {
+    return { fill: '#fff3d6', stroke: '#f97316', text: '#0f172a' }
+  }
+
+  return { fill: '#f8fafc', stroke: '#64748b', text: '#0f172a' }
+}
+
+function getObjectLabelAlignment(node: EditorNode) {
+  if (isPipeLabelNode(node) && getNodeOrientation(node) === 'vertical') {
+    return 'left'
+  }
+
+  return 'center'
+}
+
+function getObjectVisualBounds(node: EditorNode): LocalVisualBounds {
+  if (node.type === 'catchBasin') {
+    const grateStrokePadding = 3 / 2
+    return {
+      minX: 0,
+      minY: -16 - grateStrokePadding,
+      maxX: node.width,
+      maxY: node.height,
+    }
+  }
+
+  if (node.type === 'house') {
+    const roofStrokePadding = 3 / 2
+    return {
+      minX: 6 - roofStrokePadding,
+      minY: -36 - roofStrokePadding,
+      maxX: node.width - 6 + roofStrokePadding,
+      maxY: node.height,
+    }
+  }
+
+  if (node.type === 'manhole') {
+    const lidRadius = Math.min(node.width * 0.9, 84) / 2
+    const lidStrokePadding = 7 / 2
+    return {
+      minX: node.width / 2 - lidRadius - lidStrokePadding,
+      minY: -lidRadius - lidStrokePadding,
+      maxX: node.width / 2 + lidRadius + lidStrokePadding,
+      maxY: node.height,
+    }
+  }
+
+  return {
+    minX: 0,
+    minY: 0,
+    maxX: node.width,
+    maxY: node.height,
+  }
+}
+
+function createVisualOutlineRect(node: EditorNode, padding: number) {
+  const bounds = getObjectVisualBounds(node)
+  return {
+    x: bounds.minX - padding,
+    y: bounds.minY - padding,
+    width: bounds.maxX - bounds.minX + padding * 2,
+    height: bounds.maxY - bounds.minY + padding * 2,
+  }
+}
+
+function getObjectLabelPosition(node: EditorNode, labelWidth: number, labelHeight: number) {
+  const visualBounds = getObjectVisualBounds(node)
+  const visualCenterX = node.x + visualBounds.minX + (visualBounds.maxX - visualBounds.minX) / 2
+
+  if (isPipeLabelNode(node)) {
+    if (getNodeOrientation(node) === 'horizontal') {
+      return {
+        x: visualCenterX - labelWidth / 2,
+        y: node.y + visualBounds.minY - labelHeight - 8,
+      }
+    }
+
+    return {
+      x: node.x + visualBounds.maxX + 12,
+      y: node.y + visualBounds.minY + (visualBounds.maxY - visualBounds.minY) / 2 - labelHeight / 2,
+    }
+  }
+
+  return {
+    x: visualCenterX - labelWidth / 2,
+    y: node.y + visualBounds.minY - labelHeight - 8,
+  }
+}
+
 /** velocity가 없을 때 flow/inflow/fill 값을 fallback으로 사용해 animation 속도를 추정한다. */
 function getRuntimeFlowSpeed(state: RuntimeObjectState | undefined) {
   const velocity = Math.abs(state?.maxVelocityMps ?? 0)
@@ -237,7 +435,7 @@ function getRuntimeFlowSpeed(state: RuntimeObjectState | undefined) {
 }
 
 /** runtime 흐름 상태를 화살표 방향, 투명도, animation 속도 설정으로 변환한다. */
-function getFlowAnimationConfig(state: RuntimeObjectState | undefined) {
+function getFlowAnimationConfig(state: RuntimeObjectState | undefined, reverseFlowThreshold: number) {
   const flowCms = state?.flowCms ?? 0
   const totalInflowCms = state?.totalInflowCms ?? 0
   const speed = getRuntimeFlowSpeed(state)
@@ -250,7 +448,7 @@ function getFlowAnimationConfig(state: RuntimeObjectState | undefined) {
 
   return {
     isActive,
-    isReverse: flowCms < -FLOW_REVERSE_CMS_THRESHOLD,
+    isReverse: flowCms <= -reverseFlowThreshold,
     opacity: isActive ? Math.min(1, 0.42 + speed * 0.18) : 0.28,
     durationSeconds,
   }
@@ -277,20 +475,25 @@ function createPipeFlowArrowItems(
 
 /** 캔버스 bounds 기준으로 재사용 가능한 빗방울 좌표 배열을 만든다. */
 function createRainDropItems(bounds: ViewBounds, groundSurfaceY: number) {
-  const dropCount = Math.min(72, Math.max(10, Math.floor(bounds.width / 76)))
+  const dropCount = Math.min(240, Math.max(16, Math.ceil(bounds.width / 54)))
+  const laneWidth = bounds.width / dropCount
   const topY = bounds.minY + 20
   const fallDistance = Math.max(140, groundSurfaceY - topY + 80)
 
   return {
     fallDistance,
-    drops: Array.from({ length: dropCount }, (_, index) => ({
-      index,
-      x: bounds.minX + ((index * 61) % Math.max(1, bounds.width)),
-      y: topY + ((index * 37) % 180),
-      length: 24 + (index % 3) * 7,
-      durationBaseSeconds: 1.15 + (index % 7) * 0.08,
-      beginSeconds: (index % 11) * 0.1,
-    })),
+    drops: Array.from({ length: dropCount }, (_, index) => {
+      const jitter = (((index * 37) % 100) / 100 - 0.5) * laneWidth * 0.72
+
+      return {
+        index,
+        x: bounds.minX + laneWidth * (index + 0.5) + jitter,
+        y: topY + ((index * 37) % 180),
+        length: 24 + (index % 3) * 7,
+        durationBaseSeconds: 1.15 + (index % 7) * 0.08,
+        beginSeconds: (index % 11) * 0.1,
+      }
+    }),
   }
 }
 
@@ -373,31 +576,107 @@ function shouldRenderUpstreamExtension(node: EditorNode, bounds: ViewBounds, has
 function computeViewBounds(layout: EditorLayout): ViewBounds {
   if (layout.nodes.length === 0) {
     return {
-      minX: -PREVIEW_PADDING,
-      minY: -PREVIEW_PADDING,
-      maxX: 1000,
-      maxY: 700,
-      width: 1000 + PREVIEW_PADDING * 2,
-      height: 700 + PREVIEW_PADDING * 2,
+      minX: 0,
+      minY: 0,
+      maxX: EDITOR_CANVAS_WIDTH,
+      maxY: EDITOR_CANVAS_HEIGHT,
+      width: EDITOR_CANVAS_WIDTH,
+      height: EDITOR_CANVAS_HEIGHT,
     }
   }
 
-  const minNodeX = Math.min(...layout.nodes.map((node) => node.x))
-  const minNodeY = Math.min(...layout.nodes.map((node) => node.y))
-  const maxNodeX = Math.max(...layout.nodes.map((node) => node.x + node.width))
-  const maxNodeY = Math.max(...layout.nodes.map((node) => node.y + node.height))
-  const minX = minNodeX - PREVIEW_PADDING
-  const minY = Math.min(minNodeY, layout.groundSurfaceY - 260) - PREVIEW_PADDING
-  const maxX = maxNodeX + PREVIEW_PADDING
-  const maxY = Math.max(maxNodeY, layout.groundSurfaceY + 420) + PREVIEW_PADDING
+  const contentRight = layout.nodes.reduce(
+    (maxRight, node) => (
+      node.type === 'terrain' ? maxRight : Math.max(maxRight, node.x + node.width)
+    ),
+    EDITOR_CANVAS_WIDTH,
+  )
+  const terrainRight = layout.nodes.reduce(
+    (maxRight, node) => (
+      node.type === 'terrain' ? Math.max(maxRight, node.x + node.width) : maxRight
+    ),
+    EDITOR_CANVAS_WIDTH,
+  )
+  const contentBottom = layout.nodes.reduce(
+    (maxBottom, node) => (
+      node.type === 'terrain' ? maxBottom : Math.max(maxBottom, node.y + node.height)
+    ),
+    layout.groundSurfaceY,
+  )
+  const terrainBottom = layout.nodes.reduce(
+    (maxBottom, node) => (
+      node.type === 'terrain' ? Math.max(maxBottom, node.y + node.height) : maxBottom
+    ),
+    layout.groundSurfaceY,
+  )
+  const width = Math.max(
+    EDITOR_CANVAS_WIDTH,
+    Math.ceil(contentRight + CANVAS_RIGHT_PADDING),
+    Math.ceil(terrainRight),
+  )
+  const height = Math.max(
+    EDITOR_CANVAS_HEIGHT,
+    Math.ceil(contentBottom + CANVAS_BOTTOM_PADDING),
+    Math.ceil(terrainBottom),
+    MIN_PREVIEW_HEIGHT,
+  )
 
   return {
-    minX,
-    minY,
-    maxX,
-    maxY,
-    width: maxX - minX,
-    height: Math.max(MIN_PREVIEW_HEIGHT, maxY - minY),
+    minX: 0,
+    minY: 0,
+    maxX: width,
+    maxY: height,
+    width,
+    height,
+  }
+}
+
+function createSvgBounds(bounds: ViewBounds, width: number, height: number): ViewBounds {
+  return {
+    minX: bounds.minX,
+    minY: bounds.minY,
+    maxX: bounds.minX + width,
+    maxY: bounds.minY + height,
+    width,
+    height,
+  }
+}
+
+function computeBaseGroundBounds(layout: EditorLayout, bounds: ViewBounds) {
+  const firstSideTerrainX = layout.nodes.reduce((leftMostTerrainX, node) => {
+    if (node.type !== 'terrain') {
+      return leftMostTerrainX
+    }
+
+    const startsAtGroundSurface = Math.abs(node.y - layout.groundSurfaceY) <= 1
+    if (!startsAtGroundSurface || node.x <= 0) {
+      return leftMostTerrainX
+    }
+
+    return Math.min(leftMostTerrainX, node.x)
+  }, bounds.maxX)
+  const firstBottomTerrainY = layout.nodes.reduce((topMostTerrainY, node) => {
+    if (node.type !== 'terrain') {
+      return topMostTerrainY
+    }
+
+    if (node.y <= layout.groundSurfaceY + 1) {
+      return topMostTerrainY
+    }
+
+    return Math.min(topMostTerrainY, node.y)
+  }, bounds.maxY)
+
+  const left = bounds.minX
+  const top = layout.groundSurfaceY
+  const right = Math.max(left, firstSideTerrainX)
+  const bottom = Math.max(top, firstBottomTerrainY)
+
+  return {
+    left,
+    top,
+    width: right - left,
+    height: bottom - top,
   }
 }
 
@@ -578,144 +857,129 @@ const FloodOverflow = memo(function FloodOverflow({
   previous.animationSpeedMultiplier === next.animationSpeedMultiplier
 ))
 
-/** 객체 위에 만관율, 막힘률, 침수 경고를 작은 badge로 표시한다. */
-const ObjectRuntimeBadge = memo(function ObjectRuntimeBadge({
+const ObjectLabelItem = memo(function ObjectLabelItem({
   node,
   state,
-  animationSpeedMultiplier,
 }: {
   node: EditorNode
   state?: RuntimeObjectState
-  animationSpeedMultiplier: number
 }) {
-  if (!state) {
-    return null
-  }
-
-  if (isConnectorNode(node)) {
-    return null
-  }
-
-  const fullnessRatio = getNodeBadgeRatio(node, state)
-  const blockageRatio = clamp01(state.maxBlockageRatio)
-  const hasBlockage = blockageRatio > 0
-  const flooded = hasVisibleFlooding(node, state)
-  const hasBadgeActivity = fullnessRatio > 0 && (
-    Math.abs(state.flowCms ?? 0) > BADGE_ACTIVITY_FLOW_THRESHOLD
-    || Math.abs(state.totalInflowCms ?? 0) > BADGE_ACTIVITY_FLOW_THRESHOLD
-  )
-
-  return (
-    <g transform={`translate(${node.width - 52} ${-28})`} pointerEvents="none">
-      {flooded ? (
-        <g transform="translate(-34 -2)">
-          <path d="M12 0 L24 22 H0 Z" fill="#fee2e2" stroke="#ef4444" strokeWidth="2">
-            <animate attributeName="opacity" values="1;.45;1" dur={`${animationDuration(0.8, animationSpeedMultiplier)}s`} repeatCount="indefinite" />
-          </path>
-          <text x="12" y="18" textAnchor="middle" className="select-none text-[15px] font-black" fill="#b91c1c">!</text>
-        </g>
-      ) : null}
-      <rect width="50" height="22" rx="11" fill={hasBlockage ? '#fff1f2' : '#eff6ff'} stroke={hasBlockage ? '#fb7185' : '#60a5fa'} strokeWidth="2" />
-      <text
-        x="25"
-        y="15"
-        textAnchor="middle"
-        className="select-none text-[12px] font-black"
-        fill={hasBlockage ? '#be123c' : '#1d4ed8'}
-      >
-        {hasBlockage ? formatBadgePercent(blockageRatio) : formatBadgePercent(fullnessRatio)}
-      </text>
-      {hasBadgeActivity ? <circle cx="45" cy="3" r="4" fill="#22c55e" /> : null}
-    </g>
-  )
+  return <ObjectLabel node={node} state={state} />
 }, (previous, next) => (
   previous.node === next.node &&
-  previous.animationSpeedMultiplier === next.animationSpeedMultiplier &&
   areRuntimeStatesEquivalent(previous.state, next.state)
 ))
 
-/** 월드 좌표계 노드 위치에 runtime badge를 배치하는 래퍼다. */
-const RuntimeBadgeItem = memo(function RuntimeBadgeItem({
-  node,
-  state,
-  animationSpeedMultiplier,
-}: {
-  node: EditorNode
-  state?: RuntimeObjectState
-  animationSpeedMultiplier: number
-}) {
-  return (
-    <g transform={`translate(${node.x} ${node.y})`}>
-      <ObjectRuntimeBadge
-        node={node}
-        state={state}
-        animationSpeedMultiplier={animationSpeedMultiplier}
-      />
-    </g>
-  )
-}, (previous, next) => (
-  previous.node === next.node &&
-  previous.animationSpeedMultiplier === next.animationSpeedMultiplier &&
-  areRuntimeStatesEquivalent(previous.state, next.state)
-))
-
-/** runtime badge 대상 노드 목록을 순회하며 badge 레이어를 렌더링한다. */
-function RuntimeBadgeLayer({
+const ObjectLabelLayer = memo(function ObjectLabelLayer({
   nodes,
   editorObjects,
-  animationSpeedMultiplier,
 }: {
   nodes: EditorNode[]
   editorObjects: RuntimeEditorObjects | null
-  animationSpeedMultiplier: number
 }) {
-  if (!editorObjects) {
-    return null
-  }
-
   return (
     <g pointerEvents="none">
       {nodes.map((node) => (
-        <RuntimeBadgeItem
-          key={`${node.id}-runtime-badge`}
+        <ObjectLabelItem
+          key={`${node.id}-object-label`}
           node={node}
-          state={editorObjects[node.id]}
-          animationSpeedMultiplier={animationSpeedMultiplier}
+          state={editorObjects?.[node.id]}
         />
       ))}
     </g>
   )
-}
+}, (previous, next) => (
+  previous.nodes === next.nodes &&
+  previous.editorObjects === next.editorObjects
+))
 
-/** 노드 중앙 또는 지정 위치에 객체 이름 라벨을 렌더링한다. */
-function NodeLabel({ node, y }: { node: EditorNode; y?: number }) {
+function ObjectLabel({ node, state }: { node: EditorNode; state?: RuntimeObjectState }) {
+  if (!shouldRenderObjectLabel(node)) {
+    return null
+  }
+
+  const status = getObjectStatusPercent(node, state)
+  const statusText = status?.text ?? null
+  const statusWidth = statusText ? Math.max(48, statusText.length * 8 + 18) : 0
+  const nameWidth = getObjectLabelWidth(node.name)
+  const labelWidth = getObjectInfoLabelWidth(node.name, statusText)
+  const labelHeight = getObjectInfoLabelHeight(Boolean(statusText))
+  const position = getObjectLabelPosition(node, labelWidth, labelHeight)
+  const palette = getObjectLabelPalette(node)
+  const hasBlockage = status?.hasBlockage ?? false
+  const alignment = getObjectLabelAlignment(node)
+  const nameX = alignment === 'left' ? 0 : (labelWidth - nameWidth) / 2
+  const statusX = alignment === 'left' ? 0 : (labelWidth - statusWidth) / 2
+
   return (
-    <text
-      x={node.width / 2}
-      y={y ?? node.height / 2 + 8}
-      textAnchor="middle"
-      className="select-none text-[20px] font-black"
-      fill="#0f172a"
-      paintOrder="stroke"
-      stroke="white"
-      strokeWidth="6"
-      pointerEvents="none"
-    >
-      {node.name}
-    </text>
+    <g transform={`translate(${position.x} ${position.y})`} pointerEvents="none">
+      <g transform={`translate(${nameX} 0)`}>
+        <rect
+          width={nameWidth}
+          height={OBJECT_NAME_BADGE_HEIGHT}
+          rx="7"
+          fill={palette.fill}
+          stroke={palette.stroke}
+          strokeWidth="2.25"
+          opacity="0.96"
+        />
+        <rect
+          x="4"
+          y="4"
+          width="7"
+          height={OBJECT_NAME_BADGE_HEIGHT - 8}
+          rx="3.5"
+          fill={palette.stroke}
+          opacity="0.9"
+        />
+        <text
+          x={nameWidth / 2 + 2}
+          y="16"
+          textAnchor="middle"
+          className="select-none text-[15px] font-black"
+          fill={palette.text}
+        >
+          {node.name}
+        </text>
+      </g>
+      {statusText ? (
+        <g transform={`translate(${statusX} ${OBJECT_NAME_BADGE_HEIGHT + OBJECT_LABEL_ROW_GAP})`}>
+          <rect
+            width={statusWidth}
+            height={OBJECT_PERCENT_BADGE_HEIGHT}
+            rx="8"
+            fill={hasBlockage ? '#fff1f2' : '#eff6ff'}
+            stroke={hasBlockage ? '#fb7185' : '#60a5fa'}
+            strokeWidth="1.5"
+          />
+          <text
+            x={statusWidth / 2}
+            y="12"
+            textAnchor="middle"
+            className="select-none text-[11px] font-black"
+            fill={hasBlockage ? '#be123c' : '#1d4ed8'}
+          >
+            {statusText}
+          </text>
+        </g>
+      ) : null}
+    </g>
   )
 }
 
 /** 선택, 막힘, 만관 위험도, 침수 상태를 노드 외곽선으로 강조한다. */
 function RuntimeOutline({ node, state, selected }: { node: EditorNode; state?: RuntimeObjectState; selected: boolean }) {
+  const selectedGlowRect = createVisualOutlineRect(node, isConnectorNode(node) ? 8 : 10)
+  const selectedStrokeRect = createVisualOutlineRect(node, 5)
+
   if (isConnectorNode(node)) {
     return selected ? (
       <g pointerEvents="none">
         <rect
-          x="-8"
-          y="-8"
-          width={node.width + 16}
-          height={node.height + 16}
+          x={selectedGlowRect.x}
+          y={selectedGlowRect.y}
+          width={selectedGlowRect.width}
+          height={selectedGlowRect.height}
           rx="12"
           fill="none"
           stroke="#fb923c"
@@ -724,10 +988,10 @@ function RuntimeOutline({ node, state, selected }: { node: EditorNode; state?: R
           filter="url(#selected-glow)"
         />
         <rect
-          x="-5"
-          y="-5"
-          width={node.width + 10}
-          height={node.height + 10}
+          x={selectedStrokeRect.x}
+          y={selectedStrokeRect.y}
+          width={selectedStrokeRect.width}
+          height={selectedStrokeRect.height}
           rx="10"
           fill="none"
           stroke="#ea580c"
@@ -747,15 +1011,16 @@ function RuntimeOutline({ node, state, selected }: { node: EditorNode; state?: R
   }
   const stroke = selected ? '#ea580c' : riskStroke ?? (flooded ? '#ef4444' : '#ef4444')
   const urgent = getFillRiskLevel(fillRatio) >= 4
+  const urgentRect = createVisualOutlineRect(node, 12)
 
   return (
     <g pointerEvents="none">
       {selected ? (
         <rect
-          x="-10"
-          y="-10"
-          width={node.width + 20}
-          height={node.height + 20}
+          x={selectedGlowRect.x}
+          y={selectedGlowRect.y}
+          width={selectedGlowRect.width}
+          height={selectedGlowRect.height}
           rx="14"
           fill="none"
           stroke="#fb923c"
@@ -766,10 +1031,10 @@ function RuntimeOutline({ node, state, selected }: { node: EditorNode; state?: R
       ) : null}
       {urgent && !selected ? (
         <rect
-          x="-12"
-          y="-12"
-          width={node.width + 24}
-          height={node.height + 24}
+          x={urgentRect.x}
+          y={urgentRect.y}
+          width={urgentRect.width}
+          height={urgentRect.height}
           rx="14"
           fill="none"
           stroke="#ef4444"
@@ -781,10 +1046,10 @@ function RuntimeOutline({ node, state, selected }: { node: EditorNode; state?: R
         </rect>
       ) : null}
       <rect
-        x="-5"
-        y="-5"
-        width={node.width + 10}
-        height={node.height + 10}
+        x={selectedStrokeRect.x}
+        y={selectedStrokeRect.y}
+        width={selectedStrokeRect.width}
+        height={selectedStrokeRect.height}
         rx="10"
         fill="none"
         stroke={stroke}
@@ -862,7 +1127,6 @@ function RoadNode({ node }: { node: EditorNode }) {
           strokeWidth="4"
         />
       ))}
-      <NodeLabel node={node} />
     </>
   )
 }
@@ -877,7 +1141,6 @@ function ApartmentNode({ node }: { node: EditorNode }) {
         return <rect key={index} x={28 + col * 40} y={28 + row * 38} width="22" height="24" fill="#fff8dc" stroke="#60a5fa" strokeWidth="2" />
       })}
       <rect x={node.width / 2 - 14} y={node.height - 34} width="28" height="34" fill="#9a6a34" />
-      <NodeLabel node={node} />
     </>
   )
 }
@@ -902,7 +1165,6 @@ function HouseNode({ node }: { node: EditorNode }) {
       <rect x="26" y={bodyY + 28} width="23" height="25" fill="#d9ecfb" stroke="#60a5fa" strokeWidth="2" />
       <rect x={node.width - 49} y={bodyY + 28} width="23" height="25" fill="#d9ecfb" stroke="#60a5fa" strokeWidth="2" />
       <rect x={node.width / 2 - 15} y={node.height - 40} width="30" height="40" fill="#9a6a34" stroke="#6b4423" strokeWidth="2" />
-      <NodeLabel node={node} y={bodyY + 66} />
     </>
   )
 }
@@ -936,7 +1198,6 @@ function CatchBasinNode({ node, state, animationSpeedMultiplier }: { node: Edito
       ) : null}
       <line x1="34" y1="34" x2={node.width - 34} y2="34" stroke="#334155" strokeWidth="3" />
       <line x1="34" y1={node.height - 34} x2={node.width - 34} y2={node.height - 34} stroke="#334155" strokeWidth="3" />
-      <NodeLabel node={node} />
     </>
   )
 }
@@ -972,7 +1233,6 @@ function ManholeNode({ node, state, animationSpeedMultiplier }: { node: EditorNo
           animationSpeedMultiplier={animationSpeedMultiplier}
         />
       ) : null}
-      <NodeLabel node={node} />
     </>
   )
 }
@@ -981,11 +1241,13 @@ function PipeFlowArrows({
   node,
   palette,
   state,
+  reverseFlowThreshold,
   animationSpeedMultiplier,
 }: {
   node: EditorNode
   palette: ReturnType<typeof getPipePalette>
   state?: RuntimeObjectState
+  reverseFlowThreshold: number
   animationSpeedMultiplier: number
 }) {
   const orientation = getNodeOrientation(node)
@@ -993,7 +1255,7 @@ function PipeFlowArrows({
   const axisLength = orientation === 'horizontal' ? node.width : node.height
   const arrowSpacing = FLOW_ARROW_SPACING
   const arrowCount = Math.max(2, Math.min(MAX_FLOW_ARROW_COUNT, Math.ceil(axisLength / arrowSpacing) + 3))
-  const flowConfig = getFlowAnimationConfig(state)
+  const flowConfig = getFlowAnimationConfig(state, reverseFlowThreshold)
   const arrowRotation = rotation + (flowConfig.isReverse ? 180 : 0)
   const arrowStroke = flowConfig.isReverse ? '#ef4444' : palette.stroke
   const radians = (arrowRotation * Math.PI) / 180
@@ -1038,13 +1300,13 @@ function PipeFlowArrows({
 function PipeSegmentNode({
   node,
   state,
+  reverseFlowThreshold,
   animationSpeedMultiplier,
-  showLabel = true,
 }: {
   node: EditorNode
   state?: RuntimeObjectState
+  reverseFlowThreshold: number
   animationSpeedMultiplier: number
-  showLabel?: boolean
 }) {
   const size = getNodePipeSize(node)
   const palette = getPipePalette(getNodePipeKind(node))
@@ -1060,7 +1322,7 @@ function PipeSegmentNode({
   const flowY = innerInset + (innerHeight - flowHeight) / 2
   const runtimeRatio = getRuntimeFillRatio(state)
   const ratio = runtimeRatio > PIPE_VISIBLE_FILL_THRESHOLD ? Math.max(runtimeRatio, PIPE_VISIBLE_FILL_MIN) : 0
-  const flowConfig = getFlowAnimationConfig(state)
+  const flowConfig = getFlowAnimationConfig(state, reverseFlowThreshold)
   const waterFill = getRiskFillColor(palette.water, runtimeRatio)
   const hasBlockage = blockageRatio > 0.001
 
@@ -1098,8 +1360,13 @@ function PipeSegmentNode({
         flowReverse={flowConfig.isReverse}
         animationSpeedMultiplier={animationSpeedMultiplier}
       />
-      <PipeFlowArrows node={node} palette={palette} state={state} animationSpeedMultiplier={animationSpeedMultiplier} />
-      {showLabel ? <NodeLabel node={node} /> : null}
+      <PipeFlowArrows
+        node={node}
+        palette={palette}
+        state={state}
+        reverseFlowThreshold={reverseFlowThreshold}
+        animationSpeedMultiplier={animationSpeedMultiplier}
+      />
     </>
   )
 }
@@ -1109,12 +1376,14 @@ const UpstreamPipeExtension = memo(function UpstreamPipeExtension({
   bounds,
   hasLeftEndpointRelation,
   state,
+  reverseFlowThreshold,
   animationSpeedMultiplier,
 }: {
   node: EditorNode
   bounds: ViewBounds
   hasLeftEndpointRelation: boolean
   state?: RuntimeObjectState
+  reverseFlowThreshold: number
   animationSpeedMultiplier: number
 }) {
   if (!shouldRenderUpstreamExtension(node, bounds, hasLeftEndpointRelation)) {
@@ -1135,13 +1404,19 @@ const UpstreamPipeExtension = memo(function UpstreamPipeExtension({
 
   return (
     <g transform={`translate(${extensionX} ${node.y})`} pointerEvents="none" aria-hidden="true">
-      <PipeSegmentNode node={extensionNode} state={state} animationSpeedMultiplier={animationSpeedMultiplier} showLabel={false} />
+      <PipeSegmentNode
+        node={extensionNode}
+        state={state}
+        reverseFlowThreshold={reverseFlowThreshold}
+        animationSpeedMultiplier={animationSpeedMultiplier}
+      />
     </g>
   )
 }, (previous, next) => (
   previous.node === next.node &&
   previous.bounds === next.bounds &&
   previous.hasLeftEndpointRelation === next.hasLeftEndpointRelation &&
+  previous.reverseFlowThreshold === next.reverseFlowThreshold &&
   previous.animationSpeedMultiplier === next.animationSpeedMultiplier &&
   areRuntimeStatesEquivalent(previous.state, next.state)
 ))
@@ -1447,7 +1722,6 @@ function FacilityNode({
         <circle cx={node.width / 2} cy={node.height * 0.62} r={Math.min(36, node.height * 0.25)} fill="rgba(255,255,255,.48)" stroke={definition.stroke} strokeWidth="5" />
       )}
       {facilityWaterOverlay}
-      <NodeLabel node={node} y={isOutfall ? node.height / 2 + 7 : 34} />
     </>
   )
 }
@@ -1479,6 +1753,7 @@ const SimulationNode = memo(function SimulationNode({
   state,
   selected,
   targetSwmmId,
+  reverseFlowThreshold,
   animationSpeedMultiplier,
   onSelectPreviewNode,
   onSelectBlockageTarget,
@@ -1487,21 +1762,26 @@ const SimulationNode = memo(function SimulationNode({
   state?: RuntimeObjectState
   selected: boolean
   targetSwmmId?: string
+  reverseFlowThreshold: number
   animationSpeedMultiplier: number
-  onSelectPreviewNode?: (nodeId: string) => void
+  onSelectPreviewNode?: (nodeId: string, targetSwmmId?: string) => void
   onSelectBlockageTarget: (swmmLinkId: string) => void
 }) {
+  const selectable = node.type !== 'terrain'
+
   return (
     <g
       transform={`translate(${node.x} ${node.y})`}
-      onClick={(event) => {
-        event.stopPropagation()
-        onSelectPreviewNode?.(node.id)
-        if (targetSwmmId) {
-          onSelectBlockageTarget(targetSwmmId)
+      onClick={selectable
+        ? (event) => {
+          event.stopPropagation()
+          onSelectPreviewNode?.(node.id, targetSwmmId)
+          if (targetSwmmId) {
+            onSelectBlockageTarget(targetSwmmId)
+          }
         }
-      }}
-      className="cursor-pointer"
+        : undefined}
+      className={selectable ? 'cursor-pointer' : undefined}
     >
       {node.type === 'terrain' ? <TerrainNode node={node} /> : null}
       {node.type === 'road' ? <RoadNode node={node} /> : null}
@@ -1509,7 +1789,14 @@ const SimulationNode = memo(function SimulationNode({
       {node.type === 'house' ? <HouseNode node={node} /> : null}
       {node.type === 'catchBasin' ? <CatchBasinNode node={node} state={state} animationSpeedMultiplier={animationSpeedMultiplier} /> : null}
       {node.type === 'manhole' ? <ManholeNode node={node} state={state} animationSpeedMultiplier={animationSpeedMultiplier} /> : null}
-      {node.type === 'pipeSegment' ? <PipeSegmentNode node={node} state={state} animationSpeedMultiplier={animationSpeedMultiplier} showLabel={false} /> : null}
+      {node.type === 'pipeSegment' ? (
+        <PipeSegmentNode
+          node={node}
+          state={state}
+          reverseFlowThreshold={reverseFlowThreshold}
+          animationSpeedMultiplier={animationSpeedMultiplier}
+        />
+      ) : null}
       {node.type === 'connector' ? <ConnectorNode node={node} state={state} animationSpeedMultiplier={animationSpeedMultiplier} /> : null}
       {node.type === 'elbowConnector' ? <ElbowConnectorNode node={node} state={state} animationSpeedMultiplier={animationSpeedMultiplier} /> : null}
       {node.type === 'teeConnector' ? <TeeConnectorNode node={node} state={state} animationSpeedMultiplier={animationSpeedMultiplier} /> : null}
@@ -1521,6 +1808,7 @@ const SimulationNode = memo(function SimulationNode({
   previous.node === next.node &&
   previous.selected === next.selected &&
   previous.targetSwmmId === next.targetSwmmId &&
+  previous.reverseFlowThreshold === next.reverseFlowThreshold &&
   previous.animationSpeedMultiplier === next.animationSpeedMultiplier &&
   previous.onSelectPreviewNode === next.onSelectPreviewNode &&
   previous.onSelectBlockageTarget === next.onSelectBlockageTarget &&
@@ -1587,12 +1875,14 @@ const UpstreamExtensionLayer = memo(function UpstreamExtensionLayer({
   bounds,
   leftEndpointRelationNodeIds,
   editorObjects,
+  reverseFlowThreshold,
   animationSpeedMultiplier,
 }: {
   nodes: EditorNode[]
   bounds: ViewBounds
   leftEndpointRelationNodeIds: Set<string>
   editorObjects: RuntimeEditorObjects | null
+  reverseFlowThreshold: number
   animationSpeedMultiplier: number
 }) {
   return (
@@ -1604,6 +1894,7 @@ const UpstreamExtensionLayer = memo(function UpstreamExtensionLayer({
           bounds={bounds}
           hasLeftEndpointRelation={leftEndpointRelationNodeIds.has(node.id)}
           state={editorObjects?.[node.id]}
+          reverseFlowThreshold={reverseFlowThreshold}
           animationSpeedMultiplier={animationSpeedMultiplier}
         />
       ))}
@@ -1614,6 +1905,7 @@ const UpstreamExtensionLayer = memo(function UpstreamExtensionLayer({
   previous.bounds === next.bounds &&
   previous.leftEndpointRelationNodeIds === next.leftEndpointRelationNodeIds &&
   previous.editorObjects === next.editorObjects &&
+  previous.reverseFlowThreshold === next.reverseFlowThreshold &&
   previous.animationSpeedMultiplier === next.animationSpeedMultiplier
 ))
 
@@ -1624,6 +1916,7 @@ const SimulationNodeLayer = memo(function SimulationNodeLayer({
   selectedEditorId,
   selectedPreviewNodeId,
   blockageTargetByEditorId,
+  reverseFlowThreshold,
   animationSpeedMultiplier,
   onSelectPreviewNode,
   onSelectBlockageTarget,
@@ -1633,8 +1926,9 @@ const SimulationNodeLayer = memo(function SimulationNodeLayer({
   selectedEditorId: string
   selectedPreviewNodeId?: string
   blockageTargetByEditorId: Map<string, SimulationBlockageTarget>
+  reverseFlowThreshold: number
   animationSpeedMultiplier: number
-  onSelectPreviewNode?: (nodeId: string) => void
+  onSelectPreviewNode?: (nodeId: string, targetSwmmId?: string) => void
   onSelectBlockageTarget: (swmmLinkId: string) => void
 }) {
   return (
@@ -1651,6 +1945,7 @@ const SimulationNodeLayer = memo(function SimulationNodeLayer({
               || (selectedPreviewNodeId && selectedPreviewNodeId === node.id),
             )}
             targetSwmmId={target?.swmmLinkId}
+            reverseFlowThreshold={reverseFlowThreshold}
             animationSpeedMultiplier={animationSpeedMultiplier}
             onSelectPreviewNode={onSelectPreviewNode}
             onSelectBlockageTarget={onSelectBlockageTarget}
@@ -1665,6 +1960,7 @@ const SimulationNodeLayer = memo(function SimulationNodeLayer({
   previous.selectedEditorId === next.selectedEditorId &&
   previous.selectedPreviewNodeId === next.selectedPreviewNodeId &&
   previous.blockageTargetByEditorId === next.blockageTargetByEditorId &&
+  previous.reverseFlowThreshold === next.reverseFlowThreshold &&
   previous.animationSpeedMultiplier === next.animationSpeedMultiplier &&
   previous.onSelectPreviewNode === next.onSelectPreviewNode &&
   previous.onSelectBlockageTarget === next.onSelectBlockageTarget
@@ -1731,6 +2027,7 @@ export function SimulationLayoutPreview({
   fullscreenControlBar,
   fullscreenInfoPanel,
   onToggleFullscreen,
+  onClearSelection,
   onSelectPreviewNode,
   onSelectBlockageTarget,
 }: SimulationLayoutPreviewProps) {
@@ -1739,9 +2036,12 @@ export function SimulationLayoutPreview({
   const bounds = useMemo(() => computeViewBounds(layout), [layout])
   const svgWidth = Math.max(960, bounds.width)
   const svgHeight = bounds.height
+  const svgBounds = useMemo(() => createSvgBounds(bounds, svgWidth, svgHeight), [bounds, svgHeight, svgWidth])
+  const baseGroundBounds = useMemo(() => computeBaseGroundBounds(layout, svgBounds), [layout, svgBounds])
   const previewMaxHeight = Math.max(360, Math.min(680, svgHeight * PREVIEW_SCALE))
   const fullscreenZoomPercent = Math.round(fullscreenZoom * 100)
   const selectedEditorId = getSelectedEditorId(selectedBlockageId, blockageTargets)
+  const reverseFlowThreshold = getReverseFlowThreshold(snapshot)
   const nodesById = useMemo(() => createNodesById(layout.nodes), [layout.nodes])
   const relationLinks = useMemo(
     () => layout.links.filter((link) => link.type === 'relation'),
@@ -1771,11 +2071,6 @@ export function SimulationLayoutPreview({
       return (nodeIndex.get(first.id) ?? 0) - (nodeIndex.get(second.id) ?? 0)
     })
   }, [layout.nodes])
-  const runtimeBadgeNodes = useMemo(
-    () => sortedNodes.filter((node) => !isConnectorNode(node)),
-    [sortedNodes],
-  )
-
   return (
     <div className={isFullscreen
       ? `fixed inset-0 z-[90] flex flex-col p-4 ${isDark ? 'bg-slate-950' : 'bg-slate-100'}`
@@ -1863,6 +2158,7 @@ export function SimulationLayoutPreview({
               preserveAspectRatio="xMidYMid meet"
               role="img"
               aria-label="편집 JSON 기반 실시간 시뮬레이션 미리보기"
+              onClick={onClearSelection}
               className={isFullscreen ? 'block max-w-none' : 'block h-auto w-full min-w-0'}
               style={isFullscreen ? {
                 width: `${fullscreenZoom * 100}%`,
@@ -1880,13 +2176,18 @@ export function SimulationLayoutPreview({
                   <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#7c2d12" floodOpacity="0.5" />
                 </filter>
               </defs>
+              <rect
+                x={svgBounds.minX}
+                y={svgBounds.minY}
+                width={svgBounds.width}
+                height={layout.groundSurfaceY - svgBounds.minY}
+                fill="#e8f5ff"
+              />
               <SoilBackground
-                minX={bounds.minX}
-                topY={layout.groundSurfaceY}
-                width={Math.max(960, bounds.width)}
-                height={bounds.maxY - layout.groundSurfaceY}
-                skyY={bounds.minY}
-                skyHeight={layout.groundSurfaceY - bounds.minY}
+                minX={baseGroundBounds.left}
+                topY={baseGroundBounds.top}
+                width={baseGroundBounds.width}
+                height={baseGroundBounds.height}
               />
               <RelationGuideLayer relationLinks={relationLinks} nodesById={nodesById} />
               <UpstreamExtensionLayer
@@ -1894,6 +2195,7 @@ export function SimulationLayoutPreview({
                 bounds={bounds}
                 leftEndpointRelationNodeIds={leftEndpointRelationNodeIds}
                 editorObjects={snapshot?.editorObjects ?? null}
+                reverseFlowThreshold={reverseFlowThreshold}
                 animationSpeedMultiplier={animationSpeedMultiplier}
               />
               <SimulationNodeLayer
@@ -1902,16 +2204,13 @@ export function SimulationLayoutPreview({
                 selectedEditorId={selectedEditorId}
                 selectedPreviewNodeId={selectedPreviewNodeId}
                 blockageTargetByEditorId={blockageTargetByEditorId}
+                reverseFlowThreshold={reverseFlowThreshold}
                 animationSpeedMultiplier={animationSpeedMultiplier}
                 onSelectPreviewNode={onSelectPreviewNode}
                 onSelectBlockageTarget={onSelectBlockageTarget}
               />
-              <RainOverlay bounds={bounds} groundSurfaceY={layout.groundSurfaceY} rainfallPercent={rainfallPercent} animationSpeedMultiplier={animationSpeedMultiplier} />
-              <RuntimeBadgeLayer
-                nodes={runtimeBadgeNodes}
-                editorObjects={snapshot?.editorObjects ?? null}
-                animationSpeedMultiplier={animationSpeedMultiplier}
-              />
+              <RainOverlay bounds={svgBounds} groundSurfaceY={layout.groundSurfaceY} rainfallPercent={rainfallPercent} animationSpeedMultiplier={animationSpeedMultiplier} />
+              <ObjectLabelLayer nodes={sortedNodes} editorObjects={snapshot?.editorObjects ?? null} />
             </svg>
           </div>
         </div>

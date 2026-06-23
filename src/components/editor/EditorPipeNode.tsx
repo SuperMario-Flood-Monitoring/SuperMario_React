@@ -123,18 +123,30 @@ function PipeFlowArrows({ node, palette }: { node: EditorNode; palette: ReturnTy
 }
 
 function getPipeLabelWidth(name: string) {
-  return clampNumber(name.length * 18 + 36, 92, 320)
+  const weightedLength = Array.from(name).reduce((sum, char) => {
+    if (/[가-힣]/.test(char)) {
+      return sum + 1.08
+    }
+
+    if (char === ' ') {
+      return sum + 0.35
+    }
+
+    return sum + 0.72
+  }, 0)
+
+  return clampNumber(weightedLength * 14 + 18, 56, 280)
 }
 
 function PipeNameLabel({ node, selected }: { node: EditorNode; selected: boolean }) {
   const orientation = getNodeOrientation(node)
   const labelWidth = getPipeLabelWidth(node.name)
-  const labelHeight = 34
+  const labelHeight = 26
   const labelX = orientation === 'horizontal'
     ? node.width / 2 - labelWidth / 2
     : node.width + 12
   const labelY = orientation === 'horizontal'
-    ? -labelHeight - 8
+    ? node.height + 8
     : node.height / 2 - labelHeight / 2
 
   return (
@@ -144,16 +156,16 @@ function PipeNameLabel({ node, selected }: { node: EditorNode; selected: boolean
         y="0"
         width={labelWidth}
         height={labelHeight}
-        rx="8"
+        rx="7"
         fill="rgba(255,255,255,.92)"
         stroke={selected ? '#ef4444' : 'rgba(15,23,42,.18)'}
         strokeWidth={selected ? 3 : 1.5}
       />
       <text
         x={labelWidth / 2}
-        y="23"
+        y="18"
         textAnchor="middle"
-        className="select-none text-[19px] font-black"
+        className="select-none text-[15px] font-black"
         fill="#0f172a"
       >
         {node.name}

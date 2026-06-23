@@ -283,6 +283,7 @@ export function SimulationWorkbench({
   const socketRef = useRef<WebSocket | null>(null)
   const autoApplyTimerRef = useRef<number | null>(null)
   const layoutFileInputRef = useRef<HTMLInputElement | null>(null)
+  const previewSelectionClearedRef = useRef(false)
 
   const layout = loadedLayout.layout
   const layoutSource = loadedLayout.source
@@ -303,13 +304,23 @@ export function SimulationWorkbench({
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen((current) => !current)
   }, [])
-  const handleSelectPreviewNode = useCallback((nodeId: string) => {
+  const handleSelectPreviewNode = useCallback((nodeId: string, targetSwmmId?: string) => {
+    previewSelectionClearedRef.current = !targetSwmmId
     setSelectedPreviewNodeId(nodeId)
+    if (!targetSwmmId) {
+      setSelectedBlockageId('')
+    }
     setIsInfoPanelOpen(true)
   }, [])
   const handleSelectBlockageTarget = useCallback((swmmLinkId: string) => {
+    previewSelectionClearedRef.current = false
     setSelectedBlockageId(swmmLinkId)
     setIsInfoPanelOpen(true)
+  }, [])
+  const handleClearPreviewSelection = useCallback(() => {
+    previewSelectionClearedRef.current = true
+    setSelectedPreviewNodeId('')
+    setSelectedBlockageId('')
   }, [])
   const selectedPreviewTarget = selectedPreviewNode
     ? blockageTargets.find((target) => target.sourceEditorId === selectedPreviewNode.id) ?? null
@@ -395,6 +406,7 @@ export function SimulationWorkbench({
   }, [closeSocket])
 
   const resetRuntimeView = useCallback(() => {
+    previewSelectionClearedRef.current = false
     setSnapshot(null)
     setRuntimeMapping(null)
     setRuntimeReport(null)
@@ -447,7 +459,7 @@ export function SimulationWorkbench({
   }, [refreshScenarios])
 
   useEffect(() => {
-    if (!selectedBlockageId && blockageTargets.length > 0) {
+    if (!selectedBlockageId && blockageTargets.length > 0 && !previewSelectionClearedRef.current) {
       const timerId = window.setTimeout(() => {
         setSelectedBlockageId(blockageTargets[0].swmmLinkId)
       }, 0)
@@ -551,6 +563,7 @@ export function SimulationWorkbench({
 
     setIsStarting(true)
     try {
+      previewSelectionClearedRef.current = false
       const initialControl = buildSwmmRuntimeControl(exportLayout, rainfallPercent, null, effectiveBlockagesById, speedMultiplier)
       const result = await startSwmmEngine(SWMM_ENGINE_URL, exportLayout, initialControl)
       const nextMapping = asSwmmRuntimeMapping(result.mapping)
@@ -1144,6 +1157,7 @@ export function SimulationWorkbench({
               </FullscreenInfoPanel>
             )}
             onToggleFullscreen={toggleFullscreen}
+            onClearSelection={handleClearPreviewSelection}
             onSelectPreviewNode={handleSelectPreviewNode}
             onSelectBlockageTarget={handleSelectBlockageTarget}
             animationSpeedMultiplier={speedMultiplier}

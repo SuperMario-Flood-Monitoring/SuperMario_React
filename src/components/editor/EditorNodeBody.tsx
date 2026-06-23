@@ -9,53 +9,138 @@ import {
   getPipePalette,
   getTeeConnectorGeometry,
 } from './editorNodeHelpers'
+import { clampNumber } from './editorGeometry'
 import { ConnectorCap, PipeSegmentNode } from './EditorPipeNode'
 import type { EditorNode } from './editorTypes'
 
 /** 노드 타입에 맞는 실제 SVG 본체 컴포넌트를 선택한다. */
 export const NodeBody = memo(function NodeBody({ node, selected }: { node: EditorNode; selected: boolean }) {
+  let body: ReactNode
+
   if (node.type === 'terrain') {
-    return <TerrainNode node={node} selected={selected} />
+    body = <TerrainNode node={node} selected={selected} />
+  } else if (node.type === 'road') {
+    body = <RoadNode node={node} selected={selected} />
+  } else if (node.type === 'apartment') {
+    body = <ApartmentNode node={node} selected={selected} />
+  } else if (node.type === 'house') {
+    body = <HouseNode node={node} selected={selected} />
+  } else if (node.type === 'catchBasin') {
+    body = <CatchBasinNode node={node} selected={selected} />
+  } else if (node.type === 'manhole') {
+    body = <ManholeNode node={node} selected={selected} />
+  } else if (node.type === 'connector') {
+    body = <ConnectorNode node={node} selected={selected} />
+  } else if (node.type === 'elbowConnector') {
+    body = <ElbowConnectorNode node={node} selected={selected} />
+  } else if (node.type === 'teeConnector') {
+    body = <TeeConnectorNode node={node} selected={selected} />
+  } else if (node.type === 'pipeSegment') {
+    body = <PipeSegmentNode node={node} selected={selected} />
+  } else {
+    body = <FacilityNode node={node} selected={selected} />
   }
 
-  if (node.type === 'road') {
-    return <RoadNode node={node} selected={selected} />
-  }
+  return (
+    <>
+      <EditorSelectionOutline node={node} selected={selected} />
+      {body}
+    </>
+  )
+})
 
-  if (node.type === 'apartment') {
-    return <ApartmentNode node={node} selected={selected} />
+interface EditorLocalVisualBounds {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+}
+
+function getEditorObjectVisualBounds(node: EditorNode): EditorLocalVisualBounds {
+  if (node.type === 'catchBasin') {
+    const grateStrokePadding = 3 / 2
+    return {
+      minX: 0,
+      minY: -16 - grateStrokePadding,
+      maxX: node.width,
+      maxY: node.height,
+    }
   }
 
   if (node.type === 'house') {
-    return <HouseNode node={node} selected={selected} />
-  }
-
-  if (node.type === 'catchBasin') {
-    return <CatchBasinNode node={node} selected={selected} />
+    const roofStrokePadding = 3 / 2
+    return {
+      minX: 6 - roofStrokePadding,
+      minY: -36 - roofStrokePadding,
+      maxX: node.width - 6 + roofStrokePadding,
+      maxY: node.height,
+    }
   }
 
   if (node.type === 'manhole') {
-    return <ManholeNode node={node} selected={selected} />
+    const lidRadius = Math.min(node.width * 0.9, 84) / 2
+    const lidStrokePadding = 7 / 2
+    return {
+      minX: node.width / 2 - lidRadius - lidStrokePadding,
+      minY: -lidRadius - lidStrokePadding,
+      maxX: node.width / 2 + lidRadius + lidStrokePadding,
+      maxY: node.height,
+    }
   }
 
-  if (node.type === 'connector') {
-    return <ConnectorNode node={node} selected={selected} />
+  return {
+    minX: 0,
+    minY: 0,
+    maxX: node.width,
+    maxY: node.height,
+  }
+}
+
+function createEditorOutlineRect(node: EditorNode, padding: number) {
+  const bounds = getEditorObjectVisualBounds(node)
+  return {
+    x: bounds.minX - padding,
+    y: bounds.minY - padding,
+    width: bounds.maxX - bounds.minX + padding * 2,
+    height: bounds.maxY - bounds.minY + padding * 2,
+  }
+}
+
+function EditorSelectionOutline({ node, selected }: { node: EditorNode; selected: boolean }) {
+  if (!selected) {
+    return null
   }
 
-  if (node.type === 'elbowConnector') {
-    return <ElbowConnectorNode node={node} selected={selected} />
-  }
+  const glowRect = createEditorOutlineRect(node, 10)
+  const strokeRect = createEditorOutlineRect(node, 5)
 
-  if (node.type === 'teeConnector') {
-    return <TeeConnectorNode node={node} selected={selected} />
-  }
-
-  if (node.type === 'pipeSegment') {
-    return <PipeSegmentNode node={node} selected={selected} />
-  }
-
-  return <FacilityNode node={node} selected={selected} />
-})
+  return (
+    <g pointerEvents="none">
+      <rect
+        x={glowRect.x}
+        y={glowRect.y}
+        width={glowRect.width}
+        height={glowRect.height}
+        rx="14"
+        fill="none"
+        stroke="#fb923c"
+        strokeWidth="10"
+        opacity="0.28"
+      />
+      <rect
+        x={strokeRect.x}
+        y={strokeRect.y}
+        width={strokeRect.width}
+        height={strokeRect.height}
+        rx="10"
+        fill="none"
+        stroke="#ea580c"
+        strokeWidth="4"
+        opacity="0.94"
+      />
+    </g>
+  )
+}
 
 /** 공통 노드 프레임과 선택 테두리를 렌더링한다. */
 function NodeFrame({
@@ -97,6 +182,72 @@ function NodeFrame({
         {node.name}
       </text>
     </>
+  )
+}
+
+function getEditorObjectLabelWidth(name: string) {
+  const weightedLength = Array.from(name).reduce((sum, char) => {
+    if (/[가-힣]/.test(char)) {
+      return sum + 1.08
+    }
+
+    if (char === ' ') {
+      return sum + 0.35
+    }
+
+    return sum + 0.72
+  }, 0)
+
+  return clampNumber(weightedLength * 14 + 18, 56, 280)
+}
+
+function FacilityNameLabel({
+  node,
+  selected,
+  fill,
+  stroke,
+}: {
+  node: EditorNode
+  selected: boolean
+  fill: string
+  stroke: string
+}) {
+  const labelWidth = getEditorObjectLabelWidth(node.name)
+  const labelHeight = 26
+  const activeStroke = selected ? '#f97316' : stroke
+
+  return (
+    <g
+      pointerEvents="none"
+      transform={`translate(${node.width / 2 - labelWidth / 2} ${node.height + 8})`}
+    >
+      <rect
+        width={labelWidth}
+        height={labelHeight}
+        rx="7"
+        fill={fill}
+        stroke={activeStroke}
+        strokeWidth={selected ? 2.5 : 1.75}
+        opacity="0.96"
+      />
+      <rect
+        x="4"
+        y="4"
+        width={Math.max(0, labelWidth - 8)}
+        height={labelHeight - 8}
+        rx="5"
+        fill="rgba(255,255,255,.38)"
+      />
+      <text
+        x={labelWidth / 2}
+        y="18"
+        textAnchor="middle"
+        className="select-none text-[15px] font-black"
+        fill="#0f172a"
+      >
+        {node.name}
+      </text>
+    </g>
   )
 }
 
@@ -450,18 +601,6 @@ function ConnectorNode({ node, selected }: { node: EditorNode; selected: boolean
           />
         )
       })}
-      <text
-        x={node.width / 2}
-        y={node.height + 18}
-        textAnchor="middle"
-        className="select-none text-[16px] font-black"
-        fill="#334155"
-        paintOrder="stroke"
-        stroke="white"
-        strokeWidth="4"
-      >
-        {node.name}
-      </text>
     </>
   )
 }
@@ -519,18 +658,6 @@ function ElbowConnectorNode({ node, selected }: { node: EditorNode; selected: bo
           palette={palette}
         />
       </g>
-      <text
-        x={node.width / 2}
-        y={node.height + 18}
-        textAnchor="middle"
-        className="select-none text-[16px] font-black"
-        fill="#334155"
-        paintOrder="stroke"
-        stroke="white"
-        strokeWidth="4"
-      >
-        {node.name}
-      </text>
     </>
   )
 }
@@ -614,18 +741,6 @@ function TeeConnectorNode({ node, selected }: { node: EditorNode; selected: bool
           palette={palette}
         />
       </g>
-      <text
-        x={node.width / 2}
-        y={node.height + 18}
-        textAnchor="middle"
-        className="select-none text-[16px] font-black"
-        fill="#334155"
-        paintOrder="stroke"
-        stroke="white"
-        strokeWidth="4"
-      >
-        {node.name}
-      </text>
     </>
   )
 }
@@ -707,18 +822,7 @@ function FacilityShell({
         fill="rgba(255,255,255,.28)"
       />
       {children}
-      <text
-        x={node.width / 2}
-        y="34"
-        textAnchor="middle"
-        className="select-none text-[21px] font-black"
-        fill="#0f172a"
-        paintOrder="stroke"
-        stroke="white"
-        strokeWidth="6"
-      >
-        {node.name}
-      </text>
+      <FacilityNameLabel node={node} selected={selected} fill={fill} stroke={stroke} />
     </>
   )
 }
@@ -893,8 +997,6 @@ function OutfallNode({ node, selected }: { node: EditorNode; selected: boolean }
   const stroke = selected ? '#f97316' : definition.stroke
   const grilleWidth = Math.min(70, node.width * 0.34)
   const grilleX = node.width - grilleWidth - 14
-  const labelX = Math.max(58, grilleX / 2)
-  const labelParts = definition.nodeName.split(' ')
 
   return (
     <>
@@ -930,32 +1032,7 @@ function OutfallNode({ node, selected }: { node: EditorNode; selected: boolean }
           strokeLinecap="round"
         />
       ))}
-      <text
-        x={labelX}
-        y={node.height / 2 - (labelParts.length > 1 ? 8 : -6)}
-        textAnchor="middle"
-        className="select-none text-[21px] font-black"
-        fill="#0f172a"
-        paintOrder="stroke"
-        stroke="white"
-        strokeWidth="6"
-      >
-        {labelParts[0]}
-      </text>
-      {labelParts.length > 1 ? (
-        <text
-          x={labelX}
-          y={node.height / 2 + 20}
-          textAnchor="middle"
-          className="select-none text-[21px] font-black"
-          fill="#0f172a"
-          paintOrder="stroke"
-          stroke="white"
-          strokeWidth="6"
-        >
-          {labelParts.slice(1).join(' ')}
-        </text>
-      ) : null}
+      <FacilityNameLabel node={node} selected={selected} fill={definition.fill} stroke={definition.stroke} />
     </>
   )
 }
