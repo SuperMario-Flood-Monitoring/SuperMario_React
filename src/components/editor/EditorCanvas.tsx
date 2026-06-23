@@ -57,6 +57,7 @@ import { LayoutAddHandles, PipeResizeHandles } from './EditorAffordances'
 import { EditorContextMenu } from './EditorContextMenu'
 import { EditorScenarioToolbar } from './EditorScenarioToolbar'
 import { SelectionPanel, SummaryCard } from './EditorSelectionPanel'
+import { apiClient } from '../../services/http/apiClient'
 import {
   endpointKey,
   getEndpointPoint,
@@ -2649,9 +2650,17 @@ function downloadLayout(layout: EditorLayout) {
   URL.revokeObjectURL(url)
 }
 
+/** axios header 값을 단일 문자열로 정규화한다. */
+function getHeaderValue(value: unknown) {
+  if (Array.isArray(value)) {
+    return typeof value[0] === 'string' ? value[0] : null
+  }
+  return typeof value === 'string' ? value : null
+}
+
 /** 서버 응답 header에서 다운로드 파일명을 추출한다. */
-function getDownloadFilename(response: Response, fallback: string) {
-  const disposition = response.headers.get('Content-Disposition')
+function getDownloadFilename(contentDisposition: string | null, fallback: string) {
+  const disposition = contentDisposition
   const filenameMatch = disposition?.match(/filename="([^"]+)"/)
 
   return filenameMatch?.[1] ?? fallback
@@ -2685,28 +2694,24 @@ function parseWarningHeader(value: string | null): string[] {
 /** 현재 layout을 서버에 전달해 SWMM INP 텍스트로 변환한 뒤 다운로드한다. */
 async function downloadSwmmInp(layout: EditorLayout) {
   const exportLayout = normalizeRelationAttachments(layout)
-  const response = await fetch(joinSwmmApiUrl(SWMM_ENGINE_URL, '/editor/export-inp'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
+  const response = await apiClient.post<string>(
+    joinSwmmApiUrl(SWMM_ENGINE_URL, '/editor/export-inp'),
+    {
       layout: exportLayout,
       filename: 'generated_from_editor.inp',
       title: 'SWMM model generated from React editor layout',
-    }),
-  })
+    },
+    {
+      responseType: 'text',
+      transformResponse: [(data) => data],
+    },
+  )
 
-  if (!response.ok) {
-    const errorPayload = await response.json().catch(() => null) as { message?: string } | null
-    throw new Error(errorPayload?.message ?? `SWMM INP 변환 요청이 실패했습니다. (${response.status})`)
-  }
-
-  const text = await response.text()
-  const filename = getDownloadFilename(response, 'generated_from_editor.inp')
+  const text = response.data
+  const filename = getDownloadFilename(getHeaderValue(response.headers['content-disposition']), 'generated_from_editor.inp')
   downloadTextFile(text, filename)
 
-  return parseWarningHeader(response.headers.get('X-Editor-Inp-Warnings'))
+  return parseWarningHeader(getHeaderValue(response.headers['x-editor-inp-warnings']))
 }
 
 

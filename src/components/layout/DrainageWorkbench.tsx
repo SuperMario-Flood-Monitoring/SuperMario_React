@@ -4,7 +4,13 @@ import { SimulationWorkbench } from '../simulation/SimulationWorkbench'
 import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchTheme'
 import { useState } from 'react'
 
-type WorkbenchMode = 'simulation' | 'editor'
+export type WorkbenchMode = 'simulation' | 'editor'
+
+interface DrainageWorkbenchProps {
+  mode?: WorkbenchMode
+  onModeChange?: (mode: WorkbenchMode) => void
+  onLogout?: () => void
+}
 
 const VIEW_CONFIG: Record<
   WorkbenchMode,
@@ -23,12 +29,17 @@ const VIEW_CONFIG: Record<
   },
 }
 
-export function DrainageWorkbench() {
-  const [mode, setMode] = useState<WorkbenchMode>('simulation')
+export function DrainageWorkbench({ mode, onModeChange, onLogout }: DrainageWorkbenchProps) {
+  const [internalMode, setInternalMode] = useState<WorkbenchMode>('simulation')
   const [theme, setTheme] = useState<WorkbenchTheme>('light')
-  const config = VIEW_CONFIG[mode]
+  const activeMode = mode ?? internalMode
+  const config = VIEW_CONFIG[activeMode]
   const isDark = theme === 'dark'
   const themeTokens = WORKBENCH_THEME_TOKENS[theme]
+  const changeMode = (nextMode: WorkbenchMode) => {
+    setInternalMode(nextMode)
+    onModeChange?.(nextMode)
+  }
 
   const renderWorkbenchHeader = (infoPanelControls?: InfoPanelControls) => (
       <header className={`flex min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-4 ${themeTokens.header}`}>
@@ -61,9 +72,9 @@ export function DrainageWorkbench() {
             <button
               key={viewMode}
               type="button"
-              onClick={() => setMode(viewMode as WorkbenchMode)}
+              onClick={() => changeMode(viewMode as WorkbenchMode)}
               className={`rounded-md border px-3 py-2 text-xs font-black transition ${
-                mode === viewMode
+                activeMode === viewMode
                   ? themeTokens.buttonActive
                   : themeTokens.buttonMuted
               }`}
@@ -71,13 +82,22 @@ export function DrainageWorkbench() {
               {viewConfig.label}
             </button>
           ))}
+          {onLogout ? (
+            <button
+              type="button"
+              onClick={onLogout}
+              className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
+            >
+              로그아웃
+            </button>
+          ) : null}
         </div>
       </header>
   )
 
   return (
     <main className={`min-h-screen min-w-0 overflow-x-hidden ${themeTokens.app}`}>
-      {mode === 'editor' ? (
+      {activeMode === 'editor' ? (
         <EditorCanvas theme={theme} renderHeader={renderWorkbenchHeader} />
       ) : (
         <SimulationWorkbench theme={theme} renderHeader={renderWorkbenchHeader} />

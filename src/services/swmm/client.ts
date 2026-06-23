@@ -1,4 +1,5 @@
 import type { EditorLayout } from '../../components/editor/editorTypes'
+import { apiClient, joinApiUrl } from '../http/apiClient'
 import type {
   EngineControlResponse,
   EngineStartRequest,
@@ -48,9 +49,7 @@ export type {
 } from './dto'
 
 export function joinSwmmApiUrl(baseUrl: string, path: string) {
-  const normalizedBaseUrl = baseUrl.replace(/\/+$/, '')
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`
-  return `${normalizedBaseUrl}${normalizedPath}`
+  return joinApiUrl(baseUrl, path)
 }
 
 export function getSwmmWebSocketUrl(baseUrl: string) {
@@ -62,31 +61,21 @@ export function getSwmmWebSocketUrl(baseUrl: string) {
   return url.toString()
 }
 
-async function parseJsonResponse<T>(response: Response): Promise<T> {
-  const payload = await response.json().catch(() => null) as { detail?: unknown; message?: string } | T | null
-  if (!response.ok) {
-    const detail = payload && typeof payload === 'object' && 'detail' in payload ? payload.detail : undefined
-    const message = typeof detail === 'string'
-      ? detail
-      : payload && typeof payload === 'object' && 'message' in payload
-        ? payload.message
-        : `SWMM 엔진 요청이 실패했습니다. (${response.status})`
-    throw new Error(message)
-  }
+function requirePayload<T>(payload: T | null | undefined): T {
   if (!payload) {
     throw new Error('SWMM 엔진 응답이 비어 있습니다.')
   }
-  return payload as T
+  return payload
 }
 
 export async function getSwmmEngineStatus(baseUrl: string): Promise<SwmmEngineStatus> {
-  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/status'))
-  return parseJsonResponse<SwmmEngineStatus>(response)
+  const response = await apiClient.get<SwmmEngineStatus>(joinSwmmApiUrl(baseUrl, '/engine/status'))
+  return requirePayload(response.data)
 }
 
 export async function getSwmmScenarios(baseUrl: string): Promise<SwmmScenario[]> {
-  const response = await fetch(joinSwmmApiUrl(baseUrl, '/scenarios'))
-  const payload = await parseJsonResponse<SwmmScenarioListResponse>(response)
+  const response = await apiClient.get<SwmmScenarioListResponse>(joinSwmmApiUrl(baseUrl, '/scenarios'))
+  const payload = requirePayload(response.data)
   return payload.scenarios
 }
 
@@ -94,14 +83,11 @@ export async function createSwmmScenario(
   baseUrl: string,
   payload: SwmmScenarioSavePayload,
 ): Promise<SwmmScenario> {
-  const response = await fetch(joinSwmmApiUrl(baseUrl, '/scenarios'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  })
-  const result = await parseJsonResponse<SwmmScenarioDetailResponse>(response)
+  const response = await apiClient.post<SwmmScenarioDetailResponse>(
+    joinSwmmApiUrl(baseUrl, '/scenarios'),
+    payload,
+  )
+  const result = requirePayload(response.data)
   return result.scenario
 }
 
@@ -110,14 +96,11 @@ export async function updateSwmmScenario(
   scenarioId: number,
   payload: Partial<SwmmScenarioSavePayload>,
 ): Promise<SwmmScenario> {
-  const response = await fetch(joinSwmmApiUrl(baseUrl, `/scenarios/${scenarioId}`), {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  })
-  const result = await parseJsonResponse<SwmmScenarioDetailResponse>(response)
+  const response = await apiClient.put<SwmmScenarioDetailResponse>(
+    joinSwmmApiUrl(baseUrl, `/scenarios/${scenarioId}`),
+    payload,
+  )
+  const result = requirePayload(response.data)
   return result.scenario
 }
 
@@ -132,29 +115,23 @@ export async function startSwmmEngine(
     maxRainfallMmPerHour: control.maxRainfallMmPerHour,
     control,
   }
-  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/start'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  })
-  return parseJsonResponse<SwmmRuntimeStartResponse>(response)
+  const response = await apiClient.post<SwmmRuntimeStartResponse>(joinSwmmApiUrl(baseUrl, '/engine/start'), body)
+  return requirePayload(response.data)
 }
 
 export async function stopSwmmEngine(baseUrl: string): Promise<SwmmEngineStatus> {
-  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/stop'), { method: 'POST' })
-  return parseJsonResponse<SwmmEngineStatus>(response)
+  const response = await apiClient.post<SwmmEngineStatus>(joinSwmmApiUrl(baseUrl, '/engine/stop'))
+  return requirePayload(response.data)
 }
 
 export async function pauseSwmmEngine(baseUrl: string): Promise<SwmmEngineStatus> {
-  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/pause'), { method: 'POST' })
-  return parseJsonResponse<SwmmEngineStatus>(response)
+  const response = await apiClient.post<SwmmEngineStatus>(joinSwmmApiUrl(baseUrl, '/engine/pause'))
+  return requirePayload(response.data)
 }
 
 export async function resumeSwmmEngine(baseUrl: string): Promise<SwmmEngineStatus> {
-  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/resume'), { method: 'POST' })
-  return parseJsonResponse<SwmmEngineStatus>(response)
+  const response = await apiClient.post<SwmmEngineStatus>(joinSwmmApiUrl(baseUrl, '/engine/resume'))
+  return requirePayload(response.data)
 }
 
 export async function resetSwmmEngine(
@@ -168,26 +145,14 @@ export async function resetSwmmEngine(
     maxRainfallMmPerHour: control.maxRainfallMmPerHour,
     control,
   }
-  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/reset'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  })
-  return parseJsonResponse<SwmmRuntimeStartResponse>(response)
+  const response = await apiClient.post<SwmmRuntimeStartResponse>(joinSwmmApiUrl(baseUrl, '/engine/reset'), body)
+  return requirePayload(response.data)
 }
 
 export async function updateSwmmEngineControl(
   baseUrl: string,
   control: SwmmEngineControl,
 ): Promise<EngineControlResponse> {
-  const response = await fetch(joinSwmmApiUrl(baseUrl, '/engine/control'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(control),
-  })
-  return parseJsonResponse(response)
+  const response = await apiClient.post<EngineControlResponse>(joinSwmmApiUrl(baseUrl, '/engine/control'), control)
+  return requirePayload(response.data)
 }
