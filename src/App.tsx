@@ -85,8 +85,8 @@ function App() {
     }
   }, [authSession, route])
 
-  const handleLogin = async (email: string, password: string) => {
-    const nextSession = await loginWithPassword(email, password)
+  const handleLogin = async (username: string, password: string) => {
+    const nextSession = await loginWithPassword(username, password)
     setAuthSession(nextSession)
     navigate('simulation', { replace: true })
   }

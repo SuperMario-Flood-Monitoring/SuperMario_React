@@ -68,6 +68,16 @@ interface LocalVisualBounds {
 const MIN_PREVIEW_HEIGHT = 560
 const FLOW_ACTIVE_SPEED_THRESHOLD = 0.001
 const FLOW_ACTIVE_CMS_THRESHOLD = 0.00005
+
+function getWeatherPresetLabel(rainfallPercent: number) {
+  if (rainfallPercent >= 200) {
+    return '폭우'
+  }
+  if (rainfallPercent > 0) {
+    return '비옴'
+  }
+  return '맑음'
+}
 const DEFAULT_FLOW_REVERSE_CMS_THRESHOLD = 0.005
 const FLOW_ARROW_SPACING = 104
 const MAX_FLOW_ARROW_COUNT = 48
@@ -2097,7 +2107,7 @@ export function SimulationLayoutPreview({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-[11px] font-black">
-          <span className="rounded-full bg-blue-100 px-2 py-1 text-blue-700">강수 {Math.round(rainfallPercent)}%</span>
+          <span className="rounded-full bg-blue-100 px-2 py-1 text-blue-700">날씨 {getWeatherPresetLabel(rainfallPercent)}</span>
           <span className="rounded-full bg-slate-200 px-2 py-1 text-slate-600">
             {snapshot ? `tick ${snapshot.stepIndex}` : '엔진 대기'}
           </span>

@@ -2,11 +2,11 @@ import { useState, type FormEvent } from 'react'
 import logoImage from '../../assets/supermario-logo.png'
 
 interface LoginPageProps {
-  onLogin: (email: string, password: string) => Promise<void>
+  onLogin: (username: string, password: string) => Promise<void>
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -14,8 +14,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    if (!email.trim() || !password.trim()) {
-      setError('이메일과 비밀번호를 입력해주세요.')
+    if (!username.trim() || !password.trim()) {
+      setError('아이디와 비밀번호를 입력해주세요.')
       return
     }
 
@@ -23,7 +23,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setIsSubmitting(true)
 
     try {
-      await onLogin(email.trim(), password)
+      await onLogin(username.trim(), password)
     } catch (loginError) {
       const message = loginError instanceof Error ? loginError.message : '로그인 요청에 실패했습니다.'
       setError(message)
@@ -66,20 +66,20 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <div>
               <h2 className="text-2xl font-black">로그인</h2>
               <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                이메일과 비밀번호로 로그인해 배수도 편집과 시뮬레이션을 시작하세요.
+                관리자 아이디와 비밀번호로 로그인해 배수도 편집과 시뮬레이션을 시작하세요.
               </p>
             </div>
 
             <label className="mt-6 block">
-              <span className="text-xs font-black uppercase text-slate-500">Email</span>
+              <span className="text-xs font-black uppercase text-slate-500">Username</span>
               <input
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                type="email"
-                autoComplete="email"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                type="text"
+                autoComplete="username"
                 disabled={isSubmitting}
                 className="mt-2 h-12 w-full rounded-md border border-slate-300 bg-white px-3 text-base font-bold text-slate-950 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-                placeholder="operator@example.com"
+                placeholder="admin"
               />
             </label>
 

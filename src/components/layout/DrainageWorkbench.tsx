@@ -1,5 +1,6 @@
 import { EditorCanvas } from '../editor'
 import { InfoPanelToggleButton, type InfoPanelControls } from './InfoPanelLayout'
+import { NotificationTokenModal } from '../notifications/NotificationTokenModal'
 import { SimulationWorkbench } from '../simulation/SimulationWorkbench'
 import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchTheme'
 import { useState } from 'react'
@@ -32,6 +33,7 @@ const VIEW_CONFIG: Record<
 export function DrainageWorkbench({ mode, onModeChange, onLogout }: DrainageWorkbenchProps) {
   const [internalMode, setInternalMode] = useState<WorkbenchMode>('simulation')
   const [theme, setTheme] = useState<WorkbenchTheme>('light')
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false)
   const activeMode = mode ?? internalMode
   const config = VIEW_CONFIG[activeMode]
   const isDark = theme === 'dark'
@@ -83,12 +85,30 @@ export function DrainageWorkbench({ mode, onModeChange, onLogout }: DrainageWork
             </button>
           ))}
           {onLogout ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsNotificationModalOpen(true)}
+                className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
+              >
+                알림 토큰
+              </button>
+              <button
+                type="button"
+                onClick={onLogout}
+                className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
+              >
+                로그아웃
+              </button>
+            </>
+          ) : null}
+          {!onLogout ? (
             <button
               type="button"
-              onClick={onLogout}
+              onClick={() => setIsNotificationModalOpen(true)}
               className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
             >
-              로그아웃
+              알림 토큰
             </button>
           ) : null}
         </div>
@@ -102,6 +122,12 @@ export function DrainageWorkbench({ mode, onModeChange, onLogout }: DrainageWork
       ) : (
         <SimulationWorkbench theme={theme} renderHeader={renderWorkbenchHeader} />
       )}
+      {isNotificationModalOpen ? (
+        <NotificationTokenModal
+          theme={theme}
+          onClose={() => setIsNotificationModalOpen(false)}
+        />
+      ) : null}
     </main>
   )
 }

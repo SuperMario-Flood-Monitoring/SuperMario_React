@@ -24,10 +24,8 @@ import {
   asSwmmRuntimeMapping,
   buildSwmmRuntimeControl,
   clampPercent,
-  clampRainfallPercent,
   isRealtimeSnapshot,
   isRecordValue,
-  MAX_RAINFALL_PERCENT,
   numericControlValue,
   type SwmmRuntimeMapping,
 } from '../../services/swmm/editorRuntime'
@@ -65,6 +63,11 @@ interface LoadedSimulationLayout {
 }
 
 const SIMULATION_SPEED_OPTIONS = [1, 2, 3, 4, 10] as const
+const RAINFALL_PRESET_OPTIONS = [
+  { label: '맑음', value: 0 },
+  { label: '비옴', value: 100 },
+  { label: '폭우', value: 300 },
+] as const
 
 const NODE_TYPE_LABELS: Record<string, string> = {
   apartment: '아파트',
@@ -95,6 +98,44 @@ function loadSavedLayout(): LoadedSimulationLayout {
     layout: createDefaultEditorLayout(),
     source: 'default',
   }
+}
+
+function RainfallPresetButtons({
+  value,
+  onChange,
+  isDark,
+}: {
+  value: number
+  onChange: (value: number) => void
+  isDark: boolean
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      {RAINFALL_PRESET_OPTIONS.map((option) => {
+        const isActive = Math.round(value) === option.value
+
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={isActive}
+            onClick={() => onChange(option.value)}
+            className={`rounded-md px-3 py-2 text-xs font-black leading-none transition ${
+              isActive
+                ? isDark
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'bg-slate-900 text-white shadow-sm'
+                : isDark
+                  ? 'text-slate-300 hover:bg-slate-800'
+                  : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 /** undefined/NaN 값을 대시로 표시하는 숫자 포맷 helper다. */
@@ -961,20 +1002,14 @@ export function SimulationWorkbench({
         >
           초기화
         </button>
-        <label className={`flex min-w-[220px] flex-[1_1_420px] items-center gap-2 rounded-md border px-3 py-2 ${themeTokens.panelMuted}`}>
-          <span className={`shrink-0 text-xs font-black ${isDark ? 'text-slate-300' : 'text-slate-500'}`}>강수</span>
-          <input
-            type="range"
-            min={0}
-            max={MAX_RAINFALL_PERCENT}
+        <div className={`flex items-center gap-2 rounded-md border p-1 pl-3 ${themeTokens.panelMuted}`}>
+          <span className={`shrink-0 text-xs font-black ${isDark ? 'text-slate-300' : 'text-slate-500'}`}>날씨</span>
+          <RainfallPresetButtons
             value={rainfallPercent}
-            onChange={(event) => setRainfallPercent(clampRainfallPercent(event.target.value))}
-            className="min-w-0 flex-1 accent-blue-600"
+            onChange={setRainfallPercent}
+            isDark={isDark}
           />
-          <span className="w-10 shrink-0 text-right text-xs font-black text-blue-700">
-            {Math.round(rainfallPercent)}%
-          </span>
-        </label>
+        </div>
         <div className={`flex items-center gap-1 rounded-md border p-1 ${themeTokens.panelMuted}`}>
           {SIMULATION_SPEED_OPTIONS.map((speed) => (
             <button

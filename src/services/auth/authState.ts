@@ -1,5 +1,5 @@
 export interface AuthSession {
-  email: string
+  username: string
   createdAt: string
 }
 
@@ -27,18 +27,20 @@ export function loadAuthSession(): AuthSession | null {
 
     const parsedSession: unknown = JSON.parse(rawSession)
     if (parsedSession && typeof parsedSession === 'object') {
-      const email = 'email' in parsedSession && typeof parsedSession.email === 'string'
-        ? parsedSession.email
-        : 'userName' in parsedSession && typeof parsedSession.userName === 'string'
-          ? parsedSession.userName
-          : null
+      const username = 'username' in parsedSession && typeof parsedSession.username === 'string'
+        ? parsedSession.username
+        : 'email' in parsedSession && typeof parsedSession.email === 'string'
+          ? parsedSession.email
+          : 'userName' in parsedSession && typeof parsedSession.userName === 'string'
+            ? parsedSession.userName
+            : null
 
-      if (!email) {
+      if (!username) {
         return null
       }
 
       return {
-        email,
+        username,
         createdAt: 'createdAt' in parsedSession && typeof parsedSession.createdAt === 'string'
           ? parsedSession.createdAt
           : new Date().toISOString(),
@@ -73,6 +75,7 @@ export function clearRefreshTokenCookies() {
   for (const cookieName of REFRESH_COOKIE_NAMES) {
     document.cookie = `${cookieName}=; expires=${expires}; path=/`
     document.cookie = `${cookieName}=; expires=${expires}; path=/api`
+    document.cookie = `${cookieName}=; expires=${expires}; path=/api/auth`
   }
 }
 
