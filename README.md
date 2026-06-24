@@ -187,7 +187,7 @@ SuperMario_React/
 - 막힘 UI는 사용자 조작값이고, 실제 반영 상태는 서버 snapshot의 runtime state로 확인합니다.
 - 편집 객체의 `id`, `swmmId`, 서버 mapping의 SWMM node/link ID를 임의로 분리해서 바꾸지 않습니다.
 
-## 성능 최적화 현황
+## 성능 최적화 현황 
 
 최근 렌더링 구조화와 성능 개선 작업이 진행되었습니다.
 
