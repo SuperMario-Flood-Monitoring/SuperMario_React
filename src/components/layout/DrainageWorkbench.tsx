@@ -1,9 +1,12 @@
 import { EditorCanvas } from '../editor'
 import { InfoPanelToggleButton, type InfoPanelControls } from './InfoPanelLayout'
-import { NotificationTokenModal } from '../notifications/NotificationTokenModal'
+import { MobileLandscapeNotice } from './MobileLandscapeNotice'
+import { useMobileLandscapePreference } from './mobileLandscape'
+import { NotificationChatModal } from '../notifications/NotificationChatModal'
 import { SimulationWorkbench } from '../simulation/SimulationWorkbench'
 import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchTheme'
-import { useState } from 'react'
+import logoImage from '../../assets/supermario-logo.png'
+import { useEffect, useState } from 'react'
 
 export type WorkbenchMode = 'simulation' | 'editor'
 
@@ -30,21 +33,118 @@ const VIEW_CONFIG: Record<
   },
 }
 
+function getSystemWorkbenchTheme(): WorkbenchTheme {
+  if (typeof window === 'undefined' || !window.matchMedia) {
+    return 'light'
+  }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
 export function DrainageWorkbench({ mode, onModeChange, onLogout }: DrainageWorkbenchProps) {
   const [internalMode, setInternalMode] = useState<WorkbenchMode>('simulation')
-  const [theme, setTheme] = useState<WorkbenchTheme>('light')
+  const [theme, setTheme] = useState<WorkbenchTheme>(() => getSystemWorkbenchTheme())
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false)
   const activeMode = mode ?? internalMode
   const config = VIEW_CONFIG[activeMode]
   const isDark = theme === 'dark'
   const themeTokens = WORKBENCH_THEME_TOKENS[theme]
+  const {
+    isMobileLike: isMobileLandscapeTarget,
+    isPortrait: isMobilePortrait,
+    landscapeModeSupport,
+    requestLandscape,
+  } = useMobileLandscapePreference(activeMode === 'editor')
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return undefined
+    }
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    const syncSystemTheme = () => setTheme(mediaQuery.matches ? 'dark' : 'light')
+    syncSystemTheme()
+    mediaQuery.addEventListener('change', syncSystemTheme)
+
+    return () => mediaQuery.removeEventListener('change', syncSystemTheme)
+  }, [])
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return undefined
+    }
+
+    const previousDocumentBackground = document.documentElement.style.backgroundColor
+    const previousBodyBackground = document.body.style.backgroundColor
+    const backgroundColor = theme === 'dark' ? '#020617' : '#e2e8f0'
+
+    document.documentElement.style.backgroundColor = backgroundColor
+    document.body.style.backgroundColor = backgroundColor
+
+    return () => {
+      document.documentElement.style.backgroundColor = previousDocumentBackground
+      document.body.style.backgroundColor = previousBodyBackground
+    }
+  }, [theme])
+
   const changeMode = (nextMode: WorkbenchMode) => {
     setInternalMode(nextMode)
     onModeChange?.(nextMode)
   }
+  const mobileActionGridColumns = onLogout ? 'grid-cols-4' : 'grid-cols-3'
+
+  const renderWorkbenchActions = (variant: 'desktop' | 'mobile' = 'desktop') => {
+    const actionButtonClassName = variant === 'mobile'
+      ? 'min-w-0 truncate whitespace-nowrap rounded-md border px-1.5 py-2 text-[10px] font-black leading-none transition sm:px-2 sm:text-xs'
+      : 'shrink-0 rounded-md border px-3 py-2 text-xs font-black transition'
+
+    return (
+      <>
+        {variant === 'desktop' ? (
+          <button
+            type="button"
+            onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+            className={`${actionButtonClassName} ${themeTokens.button}`}
+            title={isDark ? '화이트 모드' : '다크 모드'}
+          >
+            {isDark ? '☀️' : '🌙'}
+          </button>
+        ) : null}
+        {Object.entries(VIEW_CONFIG).map(([viewMode, viewConfig]) => (
+          <button
+            key={viewMode}
+            type="button"
+            onClick={() => changeMode(viewMode as WorkbenchMode)}
+            className={`${actionButtonClassName} ${
+              activeMode === viewMode
+                ? themeTokens.buttonActive
+                : themeTokens.buttonMuted
+            }`}
+          >
+            {viewConfig.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setIsNotificationModalOpen(true)}
+          className={`${actionButtonClassName} ${themeTokens.buttonMuted}`}
+        >
+          알림 채팅방
+        </button>
+        {onLogout ? (
+          <button
+            type="button"
+            onClick={onLogout}
+            className={`${actionButtonClassName} ${themeTokens.buttonMuted}`}
+          >
+            로그아웃
+          </button>
+        ) : null}
+      </>
+    )
+  }
 
   const renderWorkbenchHeader = (infoPanelControls?: InfoPanelControls) => (
-      <header className={`flex min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-4 ${themeTokens.header}`}>
+    <>
+      <header className={`hidden min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-4 lg:flex ${themeTokens.header}`}>
         <div className="flex min-w-0 items-start gap-3">
           {infoPanelControls && !infoPanelControls.isInfoPanelOpen ? (
             <InfoPanelToggleButton
@@ -62,68 +162,42 @@ export function DrainageWorkbench({ mode, onModeChange, onLogout }: DrainageWork
           </div>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
-            className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.button}`}
-            title={isDark ? '화이트 모드' : '다크 모드'}
-          >
-            {isDark ? '☀️' : '🌙'}
-          </button>
-          {Object.entries(VIEW_CONFIG).map(([viewMode, viewConfig]) => (
-            <button
-              key={viewMode}
-              type="button"
-              onClick={() => changeMode(viewMode as WorkbenchMode)}
-              className={`rounded-md border px-3 py-2 text-xs font-black transition ${
-                activeMode === viewMode
-                  ? themeTokens.buttonActive
-                  : themeTokens.buttonMuted
-              }`}
-            >
-              {viewConfig.label}
-            </button>
-          ))}
-          {onLogout ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setIsNotificationModalOpen(true)}
-                className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
-              >
-                알림 토큰
-              </button>
-              <button
-                type="button"
-                onClick={onLogout}
-                className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
-              >
-                로그아웃
-              </button>
-            </>
-          ) : null}
-          {!onLogout ? (
-            <button
-              type="button"
-              onClick={() => setIsNotificationModalOpen(true)}
-              className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
-            >
-              알림 토큰
-            </button>
-          ) : null}
+          {renderWorkbenchActions()}
         </div>
       </header>
+      <div className={`min-w-0 lg:hidden ${themeTokens.header}`}>
+        <div className={`flex min-w-0 items-center gap-2 border-b px-3 py-2 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          <img src={logoImage} alt="" className="h-8 w-8 shrink-0 rounded-md object-contain" />
+          <div className="min-w-0 truncate text-base font-black tracking-normal">
+            수퍼마리오
+          </div>
+        </div>
+        <div className={`grid min-w-0 ${mobileActionGridColumns} gap-1.5 border-b px-2 py-2 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          {renderWorkbenchActions('mobile')}
+        </div>
+      </div>
+    </>
   )
 
   return (
     <main className={`min-h-screen min-w-0 overflow-x-hidden ${themeTokens.app}`}>
+      <MobileLandscapeNotice
+        active={false}
+        isMobileLike={isMobileLandscapeTarget}
+        isPortrait={isMobilePortrait}
+        landscapeModeSupport={landscapeModeSupport}
+        theme={theme}
+        title="편집 모드는 가로 화면에 맞춰집니다."
+        body="모바일 브라우저가 자동 회전을 막으면 기기를 가로로 돌리거나 다시 시도해주세요."
+        onRetry={requestLandscape}
+      />
       {activeMode === 'editor' ? (
         <EditorCanvas theme={theme} renderHeader={renderWorkbenchHeader} />
       ) : (
         <SimulationWorkbench theme={theme} renderHeader={renderWorkbenchHeader} />
       )}
       {isNotificationModalOpen ? (
-        <NotificationTokenModal
+        <NotificationChatModal
           theme={theme}
           onClose={() => setIsNotificationModalOpen(false)}
         />

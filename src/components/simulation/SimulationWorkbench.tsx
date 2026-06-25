@@ -10,7 +10,6 @@ import {
   getSwmmEngineStatus,
   getSwmmWebSocketUrl,
   pauseSwmmEngine,
-  resetSwmmEngine,
   resumeSwmmEngine,
   startSwmmEngine,
   stopSwmmEngine,
@@ -29,7 +28,7 @@ import {
   numericControlValue,
   type SwmmRuntimeMapping,
 } from '../../services/swmm/editorRuntime'
-import { FullscreenInfoPanel, InfoPanelToggleButton, InlineInfoPanel } from '../layout/InfoPanelLayout'
+import { useMobileLandscapePreference } from '../layout/mobileLandscape'
 import { useLayoutIndexes } from '../diagram/useLayoutIndexes'
 import { SimulationLayoutPreview } from './SimulationLayoutPreview'
 import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchTheme'
@@ -68,6 +67,8 @@ const RAINFALL_PRESET_OPTIONS = [
   { label: '비옴', value: 100 },
   { label: '폭우', value: 300 },
 ] as const
+const FULLSCREEN_ZOOM_MIN = 1
+const FULLSCREEN_ZOOM_STEP = 0.25
 
 const NODE_TYPE_LABELS: Record<string, string> = {
   apartment: '아파트',
@@ -135,6 +136,126 @@ function RainfallPresetButtons({
         )
       })}
     </div>
+  )
+}
+
+function GearIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7Z" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2.05 2.05 0 0 1-2.9 2.9l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2.05 2.05 0 0 1-4.1 0v-.09a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2.05 2.05 0 0 1-2.9-2.9l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2.05 2.05 0 0 1 0-4.1h.09A1.7 1.7 0 0 0 4.65 8.8a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2.05 2.05 0 0 1 2.9-2.9l.06.06a1.7 1.7 0 0 0 1.87.34h.01A1.7 1.7 0 0 0 10.12 2.8V2.7a2.05 2.05 0 0 1 4.1 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2.05 2.05 0 0 1 2.9 2.9l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.56 1.03h.09a2.05 2.05 0 0 1 0 4.1h-.09A1.7 1.7 0 0 0 19.4 15Z" />
+    </svg>
+  )
+}
+
+function MenuIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+    >
+      <path d="M5 7h14" />
+      <path d="M5 12h14" />
+      <path d="M5 17h14" />
+    </svg>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+    >
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  )
+}
+
+function PlayIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="currentColor"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M8 5v14l11-7Z" />
+    </svg>
+  )
+}
+
+function PauseIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.6"
+      strokeLinecap="round"
+    >
+      <path d="M8 5v14" />
+      <path d="M16 5v14" />
+    </svg>
+  )
+}
+
+function StopIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="currentColor"
+    >
+      <rect x="7" y="7" width="10" height="10" rx="1.5" />
+    </svg>
+  )
+}
+
+function MinimizeIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 4v5H4" />
+      <path d="M15 4v5h5" />
+      <path d="M20 15h-5v5" />
+      <path d="M4 15h5v5" />
+    </svg>
   )
 }
 
@@ -295,7 +416,7 @@ export function SimulationWorkbench({
   renderHeader,
 }: {
   theme?: WorkbenchTheme
-  renderHeader?: (controls: { isInfoPanelOpen: boolean; toggleInfoPanel: () => void }) => ReactNode
+  renderHeader?: () => ReactNode
 }) {
   const isDark = theme === 'dark'
   const themeTokens = WORKBENCH_THEME_TOKENS[theme]
@@ -310,7 +431,13 @@ export function SimulationWorkbench({
   const [runtimeReport, setRuntimeReport] = useState<RuntimeReport | null>(null)
   const [rainfallPercent, setRainfallPercent] = useState(0)
   const [speedMultiplier, setSpeedMultiplier] = useState(1)
+  const [isScenarioSettingsOpen, setIsScenarioSettingsOpen] = useState(false)
+  const [isNodeStatsOpen, setIsNodeStatsOpen] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isFullscreenMenuOpen, setIsFullscreenMenuOpen] = useState(false)
+  const [fullscreenZoom, setFullscreenZoom] = useState(FULLSCREEN_ZOOM_MIN)
+  const [fullscreenViewResetSignal, setFullscreenViewResetSignal] = useState(0)
+  const [isMobileInput, setIsMobileInput] = useState(false)
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false)
   const [selectedBlockageId, setSelectedBlockageId] = useState('')
   const [selectedPreviewNodeId, setSelectedPreviewNodeId] = useState('')
@@ -325,6 +452,7 @@ export function SimulationWorkbench({
   const autoApplyTimerRef = useRef<number | null>(null)
   const layoutFileInputRef = useRef<HTMLInputElement | null>(null)
   const previewSelectionClearedRef = useRef(false)
+  const runtimeSheetDragStartYRef = useRef<number | null>(null)
 
   const layout = loadedLayout.layout
   const layoutSource = loadedLayout.source
@@ -339,12 +467,21 @@ export function SimulationWorkbench({
     [nodesById, selectedPreviewNodeId],
   )
   const selectedPreviewState = selectedPreviewNode ? snapshot?.editorObjects[selectedPreviewNode.id] : undefined
-  const toggleInfoPanel = useCallback(() => {
-    setIsInfoPanelOpen((current) => !current)
-  }, [])
+  const {
+    landscapeModeSupport,
+    requestLandscape,
+  } = useMobileLandscapePreference(isFullscreen)
   const toggleFullscreen = useCallback(() => {
+    if (!isFullscreen && landscapeModeSupport === 'supported') {
+      void requestLandscape()
+    }
+
+    if (isFullscreen) {
+      setIsFullscreenMenuOpen(false)
+    }
+
     setIsFullscreen((current) => !current)
-  }, [])
+  }, [isFullscreen, landscapeModeSupport, requestLandscape])
   const handleSelectPreviewNode = useCallback((nodeId: string, targetSwmmId?: string) => {
     previewSelectionClearedRef.current = !targetSwmmId
     setSelectedPreviewNodeId(nodeId)
@@ -362,6 +499,7 @@ export function SimulationWorkbench({
     previewSelectionClearedRef.current = true
     setSelectedPreviewNodeId('')
     setSelectedBlockageId('')
+    setIsInfoPanelOpen(false)
   }, [])
   const selectedPreviewTarget = selectedPreviewNode
     ? blockageTargets.find((target) => target.sourceEditorId === selectedPreviewNode.id) ?? null
@@ -413,6 +551,19 @@ export function SimulationWorkbench({
   const controlPayload = useMemo(() => {
     return buildSwmmRuntimeControl(exportLayout, rainfallPercent, runtimeMapping, effectiveBlockagesById, speedMultiplier)
   }, [effectiveBlockagesById, exportLayout, rainfallPercent, runtimeMapping, speedMultiplier])
+  const animationsActive = Boolean(status?.running && !status.paused)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return undefined
+    }
+
+    const mediaQuery = window.matchMedia('(pointer: coarse), (max-width: 1023px)')
+    const syncInputMode = () => setIsMobileInput(mediaQuery.matches)
+    syncInputMode()
+    mediaQuery.addEventListener('change', syncInputMode)
+
+    return () => mediaQuery.removeEventListener('change', syncInputMode)
+  }, [])
   const closeSocket = useCallback(() => {
     socketRef.current?.close()
     socketRef.current = null
@@ -643,6 +794,7 @@ export function SimulationWorkbench({
     try {
       const nextStatus = await stopSwmmEngine(SWMM_ENGINE_URL)
       setStatus(nextStatus)
+      resetRuntimeView()
       closeSocket()
     } catch (error) {
       const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
@@ -671,42 +823,6 @@ export function SimulationWorkbench({
       window.alert(`SWMM 엔진 ${status.paused ? '재개' : '일시정지'}에 실패했습니다.\n\n${message}`)
     } finally {
       setIsPausing(false)
-    }
-  }
-
-  const resetEngine = async () => {
-    if (isStarting) {
-      return
-    }
-
-    setIsStarting(true)
-    try {
-      const initialControl = buildSwmmRuntimeControl(exportLayout, rainfallPercent, null, effectiveBlockagesById, speedMultiplier)
-      const result = await resetSwmmEngine(SWMM_ENGINE_URL, exportLayout, initialControl)
-      const nextMapping = asSwmmRuntimeMapping(result.mapping)
-      const nextReport = runtimeReportFromUnknown(result.report)
-      setRuntimeMapping(nextMapping)
-      setRuntimeReport(nextReport)
-      setSnapshot(result.snapshot)
-      setStatus(result.status)
-      connectSocket()
-      if (nextMapping) {
-        const nextBlockageTargets = nextReport?.dynamicControls?.blockageTargets ?? []
-        const mappedBlockages = mergeEditorBlockagesIntoSwmmBlockages(
-          manualBlockagesById,
-          manualBlockagesByEditorId,
-          nextBlockageTargets,
-        )
-        const mappedControl = buildSwmmRuntimeControl(exportLayout, rainfallPercent, nextMapping, mappedBlockages, speedMultiplier)
-        const controlResult = await updateSwmmEngineControl(SWMM_ENGINE_URL, mappedControl)
-        setSnapshot(controlResult.snapshot)
-        setStatus((currentStatus) => currentStatus ? { ...currentStatus, control: controlResult.control } : currentStatus)
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
-      window.alert(`SWMM 엔진 초기화에 실패했습니다.\n\n${message}`)
-    } finally {
-      setIsStarting(false)
     }
   }
 
@@ -915,8 +1031,8 @@ export function SimulationWorkbench({
     </div>
   )
 
-  const shellClassName = 'relative flex min-h-screen min-w-0 items-stretch p-4'
-  const panelClassName = `flex min-h-0 min-w-0 flex-1 flex-col overflow-auto rounded-lg border p-4 shadow-sm ${themeTokens.panel}`
+  const shellClassName = 'relative flex min-h-screen min-w-0 items-stretch p-2 lg:p-4'
+  const panelClassName = `flex min-h-0 min-w-0 flex-1 flex-col overflow-visible rounded-lg border p-3 shadow-sm lg:overflow-auto lg:p-4 ${themeTokens.panel}`
   const infoPanelContent = (
     <>
         <div className="space-y-2">
@@ -960,8 +1076,194 @@ export function SimulationWorkbench({
         </div>
     </>
   )
+  const scenarioSettingsSheet = isScenarioSettingsOpen ? (
+    <div
+      className={`fixed inset-0 z-[220] flex bg-slate-950/45 ${isMobileInput ? 'items-end justify-center' : 'items-stretch justify-end'}`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="scenario-settings-title"
+      onMouseDown={() => setIsScenarioSettingsOpen(false)}
+    >
+      <section
+        className={`${isMobileInput ? 'max-h-[88vh] w-screen rounded-t-2xl border-x-0 border-b-0 border-t' : 'h-screen w-[420px] max-w-[92vw] border-l'} overflow-hidden shadow-2xl ${
+          isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-950'
+        }`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className={`flex items-center justify-between gap-3 border-b px-5 py-4 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          <div>
+            <h2 id="scenario-settings-title" className="text-base font-black">시나리오세팅</h2>
+            <p className={`mt-1 text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              날씨, 실행 속도, 시나리오를 한 번에 설정합니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsScenarioSettingsOpen(false)}
+            className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
+          >
+            닫기
+          </button>
+        </header>
+
+        <div className={`${isMobileInput ? 'max-h-[calc(88vh-76px)]' : 'h-[calc(100vh-76px)]'} overflow-y-auto px-5 py-4`}>
+          <div className="space-y-5">
+            <section>
+              <h3 className="text-sm font-black">시나리오</h3>
+              <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto_auto]">
+                <select
+                  value={selectedScenarioId ?? ''}
+                  onChange={handleScenarioSelect}
+                  disabled={Boolean(status?.hasSession)}
+                  className={`h-11 min-w-0 rounded-md border px-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
+                    isDark
+                      ? 'border-slate-700 bg-slate-950 text-slate-100'
+                      : 'border-slate-300 bg-white text-slate-800'
+                  }`}
+                  title={status?.hasSession ? '엔진 정지 후 다른 시나리오를 선택할 수 있습니다.' : '저장된 시나리오 선택'}
+                >
+                  <option value="">시나리오 선택</option>
+                  {scenarios.map((scenario) => (
+                    <option key={scenario.id} value={scenario.id}>
+                      {scenario.title} / v{scenario.version}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={refreshScenarios}
+                  disabled={isLoadingScenarios}
+                  className={`h-11 rounded-md border px-3 text-sm font-black transition-colors disabled:cursor-wait disabled:opacity-60 ${
+                    isDark
+                      ? 'border-emerald-700 bg-emerald-950 text-emerald-100 hover:border-emerald-300 hover:bg-emerald-800'
+                      : 'border-emerald-400 bg-emerald-100 text-emerald-800 hover:border-emerald-600 hover:bg-emerald-200'
+                  }`}
+                >
+                  {isLoadingScenarios ? '불러오는 중' : '새로고침'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => layoutFileInputRef.current?.click()}
+                  className={`h-11 rounded-md border px-3 text-sm font-black transition-colors ${
+                    isDark
+                      ? 'border-blue-700 bg-blue-950 text-blue-100 hover:border-blue-300 hover:bg-blue-800'
+                      : 'border-blue-400 bg-blue-100 text-blue-800 hover:border-blue-600 hover:bg-blue-200'
+                  }`}
+                >
+                  JSON 불러오기
+                </button>
+                <input
+                  ref={layoutFileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={handleImportLayout}
+                />
+              </div>
+              {scenarioError ? (
+                <div className="mt-3 rounded-md border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold leading-5 text-rose-700">
+                  시나리오 목록을 불러오지 못했습니다. {scenarioError}
+                </div>
+              ) : null}
+            </section>
+
+            <section>
+              <h3 className="text-sm font-black">날씨</h3>
+              <div className={`mt-3 rounded-lg border p-2 ${themeTokens.panelMuted}`}>
+                <RainfallPresetButtons
+                  value={rainfallPercent}
+                  onChange={setRainfallPercent}
+                  isDark={isDark}
+                />
+              </div>
+            </section>
+
+            <section>
+              <h3 className="text-sm font-black">속도</h3>
+              <div className={`mt-3 flex flex-wrap items-center gap-1 rounded-lg border p-2 ${themeTokens.panelMuted}`}>
+                {SIMULATION_SPEED_OPTIONS.map((speed) => (
+                  <button
+                    key={speed}
+                    type="button"
+                    onClick={() => setSpeedMultiplier(speed)}
+                    className={`rounded-md px-3 py-2 text-sm font-black ${
+                      speedMultiplier === speed
+                        ? isDark ? 'bg-blue-500 text-white' : 'bg-slate-900 text-white'
+                        : isDark ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {speed}x
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </div>
+  ) : null
+  const runtimeInfoSheet = isInfoPanelOpen && selectedPreviewNode ? (
+    <div
+      className={`fixed inset-0 z-[220] flex bg-slate-950/45 ${isMobileInput ? 'items-end justify-center' : 'items-stretch justify-end'}`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="runtime-info-sheet-title"
+      onClick={() => setIsInfoPanelOpen(false)}
+    >
+      <section
+        className={`${isMobileInput ? 'max-h-[88vh] w-screen rounded-t-2xl border-x-0 border-b-0 border-t' : 'h-screen w-[430px] max-w-[92vw] border-l'} overflow-hidden shadow-2xl ${
+          isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-950'
+        }`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div
+          className={`cursor-grab touch-none justify-center px-5 pt-3 active:cursor-grabbing ${isMobileInput ? 'flex' : 'hidden'}`}
+          onPointerDown={(event) => {
+            runtimeSheetDragStartYRef.current = event.clientY
+            event.currentTarget.setPointerCapture(event.pointerId)
+          }}
+          onPointerUp={(event) => {
+            const startY = runtimeSheetDragStartYRef.current
+            if (startY !== null && event.clientY - startY > 72) {
+              setIsInfoPanelOpen(false)
+            }
+            runtimeSheetDragStartYRef.current = null
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId)
+            }
+          }}
+          onPointerCancel={(event) => {
+            runtimeSheetDragStartYRef.current = null
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId)
+            }
+          }}
+        >
+          <span className={`h-1.5 w-12 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
+        </div>
+        <header className={`flex items-center justify-between gap-3 border-b px-5 py-4 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          <div>
+            <h2 id="runtime-info-sheet-title" className="text-base font-black">실행 정보</h2>
+            <p className={`mt-1 text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              선택한 객체와 현재 엔진 상태를 확인합니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsInfoPanelOpen(false)}
+            className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
+          >
+            닫기
+          </button>
+        </header>
+        <div className={`${isMobileInput ? 'max-h-[calc(88vh-96px)]' : 'h-[calc(100vh-80px)]'} overflow-y-auto px-5 py-4`}>
+          {infoPanelContent}
+        </div>
+      </section>
+    </div>
+  ) : null
   const renderControlBar = (leadingControl?: ReactNode) => (
-    <div className={`-mx-4 -mt-4 mb-4 min-w-0 border-b px-4 py-3 shadow-sm ${themeTokens.controlBar}`}>
+    <div className={`min-w-0 border-y px-3 py-3 shadow-sm lg:rounded-lg lg:border lg:px-4 ${themeTokens.controlBar}`}>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         {leadingControl}
         <button
@@ -994,83 +1296,184 @@ export function SimulationWorkbench({
         >
           {isStopping ? '정지 중' : '엔진 정지'}
         </button>
-        <button
-          type="button"
-          onClick={resetEngine}
-          disabled={isStarting}
-          className={`rounded-md border px-3 py-2 text-xs font-black disabled:cursor-wait disabled:bg-slate-100 disabled:text-slate-400 ${themeTokens.button}`}
-        >
-          초기화
-        </button>
-        <div className={`flex items-center gap-2 rounded-md border p-1 pl-3 ${themeTokens.panelMuted}`}>
-          <span className={`shrink-0 text-xs font-black ${isDark ? 'text-slate-300' : 'text-slate-500'}`}>날씨</span>
-          <RainfallPresetButtons
-            value={rainfallPercent}
-            onChange={setRainfallPercent}
-            isDark={isDark}
-          />
-        </div>
-        <div className={`flex items-center gap-1 rounded-md border p-1 ${themeTokens.panelMuted}`}>
-          {SIMULATION_SPEED_OPTIONS.map((speed) => (
-            <button
-              key={speed}
-              type="button"
-              onClick={() => setSpeedMultiplier(speed)}
-              className={`rounded px-2.5 py-1.5 text-xs font-black ${
-                speedMultiplier === speed
-                  ? isDark ? 'bg-blue-500 text-white' : 'bg-slate-900 text-white'
-                  : isDark ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {speed}x
-            </button>
-          ))}
-        </div>
-        <span className={`rounded-full px-2 py-1 text-[11px] font-black ${
-          status?.running
-            ? 'bg-emerald-100 text-emerald-700'
-            : status?.paused
-              ? 'bg-amber-100 text-amber-700'
-              : 'bg-slate-100 text-slate-500'
-        }`}>
-          {status?.running
-            ? `tick ${snapshot?.stepIndex ?? status.stepIndex}`
-            : status?.paused
-              ? `일시정지 tick ${snapshot?.stepIndex ?? status.stepIndex}`
-              : '엔진 대기'}
-        </span>
       </div>
     </div>
   )
   const controlBar = renderControlBar()
-  const fullscreenControlBar = renderControlBar(!isInfoPanelOpen ? (
-    <InfoPanelToggleButton
-      theme={theme}
-      isInfoPanelOpen={isInfoPanelOpen}
-      toggleInfoPanel={toggleInfoPanel}
-    />
-  ) : undefined)
+  const scenarioSettingsFab = !isScenarioSettingsOpen && !isFullscreen ? (
+    <button
+      type="button"
+      onClick={() => setIsScenarioSettingsOpen(true)}
+      aria-label="시나리오세팅"
+      title="시나리오세팅"
+      className="fixed bottom-5 right-8 z-[120] flex h-12 w-12 items-center justify-center rounded-full border border-blue-300 bg-blue-600 text-white shadow-xl backdrop-blur transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 lg:right-10"
+    >
+      <GearIcon />
+    </button>
+  ) : null
+  const fullscreenMenuButtonClassName = 'flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-slate-950/88 text-white shadow-xl backdrop-blur transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:cursor-wait disabled:opacity-55'
+  const fullscreenTopButtonBaseClassName = 'flex h-11 w-11 items-center justify-center rounded-md border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:cursor-wait disabled:opacity-55'
+  const fullscreenPlayButtonClassName = `${fullscreenTopButtonBaseClassName} border-emerald-300/60 bg-emerald-600/95 text-white hover:bg-emerald-500`
+  const fullscreenPauseButtonClassName = `${fullscreenTopButtonBaseClassName} border-amber-300/60 bg-amber-500/95 text-slate-950 hover:bg-amber-400`
+  const fullscreenResumeButtonClassName = `${fullscreenTopButtonBaseClassName} border-blue-300/60 bg-blue-600/95 text-white hover:bg-blue-500`
+  const fullscreenStopButtonClassName = `${fullscreenTopButtonBaseClassName} border-rose-300/60 bg-rose-600/95 text-white hover:bg-rose-500`
+  const fullscreenEngineControls = isFullscreen ? (
+    <div className="fixed left-4 top-4 z-[150] flex items-center gap-2">
+      {status?.hasSession ? (
+        <>
+          <button
+            type="button"
+            onClick={togglePauseEngine}
+            disabled={isPausing}
+            aria-label={status.paused ? '엔진 재개' : '엔진 일시정지'}
+            title={status.paused ? '엔진 재개' : '엔진 일시정지'}
+            className={status.paused ? fullscreenResumeButtonClassName : fullscreenPauseButtonClassName}
+          >
+            {status.paused ? <PlayIcon /> : <PauseIcon />}
+          </button>
+          <button
+            type="button"
+            onClick={stopEngine}
+            disabled={isStopping}
+            aria-label="엔진 정지"
+            title="엔진 정지"
+            className={fullscreenStopButtonClassName}
+          >
+            <StopIcon />
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={startEngine}
+          disabled={isStarting}
+          aria-label="엔진 시작"
+          title="엔진 시작"
+          className={fullscreenPlayButtonClassName}
+        >
+          <PlayIcon />
+        </button>
+      )}
+    </div>
+  ) : null
+  const fullscreenZoomControls = isFullscreen ? (
+    <div className="fixed right-4 top-4 z-[150] inline-flex overflow-hidden rounded-md border border-white/15 bg-slate-950/88 text-white shadow-xl backdrop-blur">
+      {fullscreenZoom > FULLSCREEN_ZOOM_MIN ? (
+        <button
+          type="button"
+          onClick={() => setFullscreenZoom((current) => Math.max(FULLSCREEN_ZOOM_MIN, current - FULLSCREEN_ZOOM_STEP))}
+          aria-label="축소"
+          title="축소"
+          className="flex h-11 w-12 items-center justify-center border-r border-white/10 text-xl font-black leading-none transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300"
+        >
+          -
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => {
+          setFullscreenZoom(FULLSCREEN_ZOOM_MIN)
+          setFullscreenViewResetSignal((current) => current + 1)
+        }}
+        aria-label="확대 초기화"
+        title="확대 초기화"
+        disabled={fullscreenZoom === FULLSCREEN_ZOOM_MIN}
+        className="flex h-11 w-12 items-center justify-center border-r border-white/10 text-sm font-black leading-none transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-45"
+      >
+        1x
+      </button>
+      <button
+        type="button"
+        onClick={() => setFullscreenZoom((current) => current + FULLSCREEN_ZOOM_STEP)}
+        aria-label="확대"
+        title="확대"
+        className="flex h-11 w-12 items-center justify-center text-xl font-black leading-none transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300"
+      >
+        +
+      </button>
+    </div>
+  ) : null
+  const fullscreenActionMenu = isFullscreen ? (
+    <div className="fixed bottom-5 right-5 z-[150] flex flex-col items-end gap-2">
+      {isFullscreenMenuOpen ? (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setIsScenarioSettingsOpen(true)
+              setIsFullscreenMenuOpen(false)
+            }}
+            aria-label="시나리오세팅"
+            title="시나리오세팅"
+            className={fullscreenMenuButtonClassName}
+          >
+            <GearIcon />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setIsFullscreen(false)
+              setIsFullscreenMenuOpen(false)
+            }}
+            aria-label="전체화면 종료"
+            title="전체화면 종료"
+            className={fullscreenMenuButtonClassName}
+          >
+            <MinimizeIcon />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsFullscreenMenuOpen(false)}
+            aria-label="전체화면 메뉴 닫기"
+            title="전체화면 메뉴 닫기"
+            className={fullscreenMenuButtonClassName}
+          >
+            <CloseIcon />
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsFullscreenMenuOpen(true)}
+          aria-label="전체화면 메뉴"
+          title="전체화면 메뉴"
+          className={fullscreenMenuButtonClassName}
+        >
+          <MenuIcon />
+        </button>
+      )}
+    </div>
+  ) : null
 
   return (
     <section className={shellClassName} data-swmm-theme={theme}>
-      {!isFullscreen ? (
-        <InlineInfoPanel
-          theme={theme}
-          title="실행 정보"
-          isOpen={isInfoPanelOpen}
-          controls={{ isInfoPanelOpen, toggleInfoPanel }}
-        >
-          {infoPanelContent}
-        </InlineInfoPanel>
-      ) : null}
+      {scenarioSettingsSheet}
+      {runtimeInfoSheet}
+      {scenarioSettingsFab}
+      {fullscreenEngineControls}
+      {fullscreenZoomControls}
+      {fullscreenActionMenu}
 
-      <div className="flex h-[calc(100vh-32px)] min-h-[640px] min-w-0 flex-1 flex-col gap-4">
-        {!isFullscreen && renderHeader ? renderHeader({ isInfoPanelOpen, toggleInfoPanel }) : null}
+      <div className="flex min-h-[calc(100vh-16px)] min-w-0 flex-1 flex-col gap-3 lg:h-[calc(100vh-32px)] lg:min-h-[640px] lg:gap-4">
+        {!isFullscreen ? (
+          <div className="min-w-0 lg:space-y-4">
+            {renderHeader ? (
+              <>
+                <div className="fixed inset-x-0 top-0 z-50 lg:static lg:inset-x-auto lg:z-auto">
+                  {renderHeader()}
+                </div>
+                <div className="pointer-events-none invisible lg:hidden" aria-hidden="true">
+                  {renderHeader()}
+                </div>
+              </>
+            ) : null}
+            {controlBar}
+          </div>
+        ) : null}
         <div className={panelClassName}>
           {!isFullscreen ? (
             <>
-              {controlBar}
-              <div className={`flex flex-wrap items-center justify-between gap-3 border-b pb-4 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+              <div className={`hidden flex-wrap items-center justify-between gap-3 border-b pb-4 lg:flex ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
                 <div>
                   <h2 className="text-base font-black">실시간 시뮬레이션</h2>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -1091,75 +1494,46 @@ export function SimulationWorkbench({
                     </span>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={selectedScenarioId ?? ''}
-                    onChange={handleScenarioSelect}
-                    disabled={Boolean(status?.hasSession)}
-                    className={`h-9 min-w-[220px] rounded-md border px-3 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
-                      isDark
-                        ? 'border-slate-700 bg-slate-950 text-slate-100'
-                        : 'border-slate-300 bg-white text-slate-800'
-                    }`}
-                    title={status?.hasSession ? '엔진 정지 후 다른 시나리오를 선택할 수 있습니다.' : '저장된 시나리오 선택'}
-                  >
-                    <option value="">시나리오 선택</option>
-                    {scenarios.map((scenario) => (
-                      <option key={scenario.id} value={scenario.id}>
-                        {scenario.title} / v{scenario.version}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={refreshScenarios}
-                    disabled={isLoadingScenarios}
-                    className={`rounded-md border px-3 py-2 text-xs font-black transition-colors disabled:cursor-wait disabled:opacity-60 ${
-                      isDark
-                        ? 'border-emerald-700 bg-emerald-950 text-emerald-100 hover:border-emerald-300 hover:bg-emerald-800'
-                        : 'border-emerald-400 bg-emerald-100 text-emerald-800 hover:border-emerald-600 hover:bg-emerald-200'
-                    }`}
-                  >
-                    {isLoadingScenarios ? '불러오는 중' : '시나리오 새로고침'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => layoutFileInputRef.current?.click()}
-                    className={`rounded-md border px-3 py-2 text-xs font-black transition-colors ${
-                      isDark
-                        ? 'border-blue-700 bg-blue-950 text-blue-100 hover:border-blue-300 hover:bg-blue-800'
-                        : 'border-blue-400 bg-blue-100 text-blue-800 hover:border-blue-600 hover:bg-blue-200'
-                    }`}
-                  >
-                    JSON 불러오기
-                  </button>
-                  <input
-                    ref={layoutFileInputRef}
-                    type="file"
-                    accept="application/json,.json"
-                    className="hidden"
-                    onChange={handleImportLayout}
-                  />
-                </div>
-              </div>
-              {scenarioError ? (
-                <div className="mt-3 rounded-md border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold leading-5 text-rose-700">
-                  시나리오 목록을 불러오지 못했습니다. {scenarioError}
-                </div>
-              ) : null}
-
-              <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <StatCell label="nodes" value={layout.nodes.length} />
-                <StatCell label="links" value={layout.links.length} />
-                <StatCell label="step" value={snapshot?.stepIndex ?? status?.stepIndex ?? 0} />
-                <StatCell label="time" value={snapshot?.modelTime ?? status?.modelTime ?? '-'} />
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <StatCell label="swmm nodes" value={snapshot?.summary.nodeCount ?? runtimeReport?.counts.junctions ?? '-'} />
-                <StatCell label="swmm links" value={snapshot?.summary.linkCount ?? runtimeReport?.counts.conduits ?? '-'} />
-                <StatCell label="rain targets" value={snapshot?.summary.rainfallTargetCount ?? runtimeReport?.dynamicControls?.rainfallTargets?.length ?? '-'} />
-                <StatCell label="blocked" value={snapshot?.summary.activeBlockageCount ?? 0} />
+              <div className={`mt-3 overflow-visible rounded-md border lg:mt-4 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white'}`}>
+                <button
+                  type="button"
+                  onClick={() => setIsNodeStatsOpen((current) => !current)}
+                  className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition ${
+                    isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <div>
+                    <h3 className="text-sm font-black">노드 정보</h3>
+                    <p className={`mt-1 text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                      노드, 링크, SWMM 매핑 통계를 확인합니다.
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${
+                    isDark ? 'bg-slate-950 text-slate-300' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {isNodeStatsOpen ? '접기' : '펼치기'}
+                  </span>
+                </button>
+
+                {isNodeStatsOpen ? (
+                  <div className={`border-t p-4 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <StatCell label="nodes" value={layout.nodes.length} />
+                      <StatCell label="links" value={layout.links.length} />
+                      <StatCell label="step" value={snapshot?.stepIndex ?? status?.stepIndex ?? 0} />
+                      <StatCell label="time" value={snapshot?.modelTime ?? status?.modelTime ?? '-'} />
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <StatCell label="swmm nodes" value={snapshot?.summary.nodeCount ?? runtimeReport?.counts.junctions ?? '-'} />
+                      <StatCell label="swmm links" value={snapshot?.summary.linkCount ?? runtimeReport?.counts.conduits ?? '-'} />
+                      <StatCell label="rain targets" value={snapshot?.summary.rainfallTargetCount ?? runtimeReport?.dynamicControls?.rainfallTargets?.length ?? '-'} />
+                      <StatCell label="blocked" value={snapshot?.summary.activeBlockageCount ?? 0} />
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               {layoutSource === 'default' ? (
@@ -1175,22 +1549,15 @@ export function SimulationWorkbench({
             layout={exportLayout}
             snapshot={snapshot}
             rainfallPercent={rainfallPercent}
+            animationsActive={animationsActive}
             theme={theme}
             isFullscreen={isFullscreen}
+            fullscreenZoom={fullscreenZoom}
+            fullscreenViewResetSignal={fullscreenViewResetSignal}
+            onFullscreenZoomChange={setFullscreenZoom}
             selectedPreviewNodeId={selectedPreviewNodeId}
             selectedBlockageId={selectedBlockageId}
             blockageTargets={blockageTargets}
-            fullscreenControlBar={fullscreenControlBar}
-            fullscreenInfoPanel={(
-              <FullscreenInfoPanel
-                theme={theme}
-                title="실행 정보"
-                isOpen={isInfoPanelOpen}
-                controls={{ isInfoPanelOpen, toggleInfoPanel }}
-              >
-                {infoPanelContent}
-              </FullscreenInfoPanel>
-            )}
             onToggleFullscreen={toggleFullscreen}
             onClearSelection={handleClearPreviewSelection}
             onSelectPreviewNode={handleSelectPreviewNode}

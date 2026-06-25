@@ -24,6 +24,7 @@ export function EditorActionToolbar({
   onExportInp,
   onImport,
   onResetLayout,
+  isSheet = false,
 }: {
   isDark: boolean
   controlBarClassName: string
@@ -47,9 +48,10 @@ export function EditorActionToolbar({
   onExportInp: () => void
   onImport: (event: ChangeEvent<HTMLInputElement>) => void
   onResetLayout: () => void
+  isSheet?: boolean
 }) {
   return (
-    <div className={`sticky top-0 z-40 flex min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3 shadow-sm backdrop-blur ${controlBarClassName}`}>
+    <div className={`${isSheet ? '' : 'sticky top-0 z-40 shadow-sm backdrop-blur'} flex min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3 ${controlBarClassName}`}>
       <div>
         <h2 className={`text-base font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>편집 모드 v1</h2>
         <p className={`mt-1 text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>

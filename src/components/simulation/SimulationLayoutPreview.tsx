@@ -1,5 +1,5 @@
 import type { EditorEndpoint, EditorLayout, EditorLink, EditorNode } from '../editor/editorTypes'
-import { memo, useMemo, useState, type ReactNode } from 'react'
+import { memo, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CANVAS_BOTTOM_PADDING, CANVAS_RIGHT_PADDING, PIPE_BORDER, PIPE_KIND_DEFINITIONS } from '../editor/editorDefinitions'
 import { EDITOR_CANVAS_HEIGHT, EDITOR_CANVAS_WIDTH } from '../editor/defaultLayout'
 import {
@@ -33,13 +33,15 @@ interface SimulationLayoutPreviewProps {
   snapshot: SwmmRealtimeSnapshot | null
   rainfallPercent: number
   animationSpeedMultiplier: number
+  animationsActive?: boolean
+  fullscreenZoom?: number
+  fullscreenViewResetSignal?: number
+  onFullscreenZoomChange?: (nextZoom: number | ((current: number) => number)) => void
   theme?: 'light' | 'dark'
   isFullscreen?: boolean
   selectedPreviewNodeId?: string
   selectedBlockageId: string
   blockageTargets: SimulationBlockageTarget[]
-  fullscreenControlBar?: ReactNode
-  fullscreenInfoPanel?: ReactNode
   onToggleFullscreen?: () => void
   onClearSelection?: () => void
   onSelectPreviewNode?: (nodeId: string, targetSwmmId?: string) => void
@@ -68,6 +70,13 @@ interface LocalVisualBounds {
 const MIN_PREVIEW_HEIGHT = 560
 const FLOW_ACTIVE_SPEED_THRESHOLD = 0.001
 const FLOW_ACTIVE_CMS_THRESHOLD = 0.00005
+const FULLSCREEN_DRAG_THRESHOLD_PX = 3
+const FULLSCREEN_WHEEL_ZOOM_STEP = 0.15
+const WHEEL_LINE_HEIGHT_PX = 16
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value))
+}
 
 function getWeatherPresetLabel(rainfallPercent: number) {
   if (rainfallPercent >= 200) {
@@ -77,6 +86,37 @@ function getWeatherPresetLabel(rainfallPercent: number) {
     return '비옴'
   }
   return '맑음'
+}
+
+function FullscreenToggleIcon({ isFullscreen }: { isFullscreen: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {isFullscreen ? (
+        <>
+          <path d="M9 4v5H4" />
+          <path d="M15 4v5h5" />
+          <path d="M20 15h-5v5" />
+          <path d="M4 15h5v5" />
+        </>
+      ) : (
+        <>
+          <path d="M4 10V4h6" />
+          <path d="M14 4h6v6" />
+          <path d="M20 14v6h-6" />
+          <path d="M10 20H4v-6" />
+        </>
+      )}
+    </svg>
+  )
 }
 const DEFAULT_FLOW_REVERSE_CMS_THRESHOLD = 0.005
 const FLOW_ARROW_SPACING = 104
@@ -91,8 +131,6 @@ const PIPE_VISIBLE_FILL_MIN = 0.08
 const OVERFLOW_GATE_OPEN_RATIO = 0.5
 const OVERFLOW_GATE_PREVIEW_ANIMATION = false
 const MANHOLE_CONNECTED_FILL_MIN = 0.03
-const FULLSCREEN_ZOOM_MIN = 0.5
-const FULLSCREEN_ZOOM_STEP = 0.25
 const FLOOD_WARNING_CMS_THRESHOLD = 0.0005
 const OBJECT_NAME_BADGE_HEIGHT = 23
 const OBJECT_PERCENT_BADGE_HEIGHT = 16
@@ -111,11 +149,6 @@ function clamp01(value: number | undefined) {
   }
 
   return Math.max(0, Math.min(1, value))
-}
-
-/** 전체화면 확대 배율이 최소값보다 작아지지 않도록 제한한다. */
-function clampFullscreenZoom(value: number) {
-  return Math.max(FULLSCREEN_ZOOM_MIN, value)
 }
 
 /** SVG clipPath/filter id로 안전하게 사용할 수 있는 문자열로 변환한다. */
@@ -2029,19 +2062,20 @@ export function SimulationLayoutPreview({
   snapshot,
   rainfallPercent,
   animationSpeedMultiplier,
+  animationsActive = true,
+  fullscreenZoom = 1,
+  fullscreenViewResetSignal = 0,
+  onFullscreenZoomChange,
   theme = 'light',
   isFullscreen = false,
   selectedPreviewNodeId,
   selectedBlockageId,
   blockageTargets,
-  fullscreenControlBar,
-  fullscreenInfoPanel,
   onToggleFullscreen,
   onClearSelection,
   onSelectPreviewNode,
   onSelectBlockageTarget,
 }: SimulationLayoutPreviewProps) {
-  const [fullscreenZoom, setFullscreenZoom] = useState(1)
   const isDark = theme === 'dark'
   const bounds = useMemo(() => computeViewBounds(layout), [layout])
   const svgWidth = Math.max(960, bounds.width)
@@ -2049,7 +2083,6 @@ export function SimulationLayoutPreview({
   const svgBounds = useMemo(() => createSvgBounds(bounds, svgWidth, svgHeight), [bounds, svgHeight, svgWidth])
   const baseGroundBounds = useMemo(() => computeBaseGroundBounds(layout, svgBounds), [layout, svgBounds])
   const previewMaxHeight = Math.max(360, Math.min(680, svgHeight * PREVIEW_SCALE))
-  const fullscreenZoomPercent = Math.round(fullscreenZoom * 100)
   const selectedEditorId = getSelectedEditorId(selectedBlockageId, blockageTargets)
   const reverseFlowThreshold = getReverseFlowThreshold(snapshot)
   const nodesById = useMemo(() => createNodesById(layout.nodes), [layout.nodes])
@@ -2065,6 +2098,28 @@ export function SimulationLayoutPreview({
     () => createBlockageTargetByEditorId(blockageTargets),
     [blockageTargets],
   )
+  const [fullscreenPan, setFullscreenPan] = useState({ x: 0, y: 0 })
+  const fullscreenDragRef = useRef({
+    pointerId: -1,
+    startX: 0,
+    startY: 0,
+    originX: 0,
+    originY: 0,
+    screenToSvg: 1,
+    hasMoved: false,
+  })
+  const suppressNextFullscreenClickRef = useRef(false)
+  const fullscreenRootRef = useRef<HTMLDivElement | null>(null)
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const runtimeViewBox = useMemo(() => {
+    const safeZoom = Math.max(1, isFullscreen ? fullscreenZoom : 1)
+    const viewWidth = svgWidth / safeZoom
+    const viewHeight = svgHeight / safeZoom
+    const centerX = bounds.minX + svgWidth / 2 - (isFullscreen ? fullscreenPan.x : 0)
+    const centerY = bounds.minY + svgHeight / 2 - (isFullscreen ? fullscreenPan.y : 0)
+
+    return `${centerX - viewWidth / 2} ${centerY - viewHeight / 2} ${viewWidth} ${viewHeight}`
+  }, [bounds.minX, bounds.minY, fullscreenPan.x, fullscreenPan.y, fullscreenZoom, isFullscreen, svgHeight, svgWidth])
   const sortedNodes = useMemo(() => {
     const nodeIndex = new Map(layout.nodes.map((node, index) => [node.id, index]))
     return [...layout.nodes].sort((first, second) => {
@@ -2081,15 +2136,293 @@ export function SimulationLayoutPreview({
       return (nodeIndex.get(first.id) ?? 0) - (nodeIndex.get(second.id) ?? 0)
     })
   }, [layout.nodes])
+  useEffect(() => {
+    const svgElement = svgRef.current
+    if (!svgElement) {
+      return
+    }
+
+    if (animationsActive) {
+      svgElement.unpauseAnimations()
+    } else {
+      svgElement.pauseAnimations()
+    }
+  }, [animationsActive, snapshot])
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      setFullscreenPan({ x: 0, y: 0 })
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [fullscreenViewResetSignal])
+  const handleFullscreenPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (!isFullscreen || event.pointerType === 'mouse') {
+      return
+    }
+
+    const rect = svgRef.current?.getBoundingClientRect()
+    const safeZoom = Math.max(1, fullscreenZoom)
+    const viewWidth = svgWidth / safeZoom
+    const viewHeight = svgHeight / safeZoom
+    const viewportScale = rect
+      ? Math.min(rect.width / viewWidth, rect.height / viewHeight)
+      : 1
+
+    fullscreenDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: fullscreenPan.x,
+      originY: fullscreenPan.y,
+      screenToSvg: viewportScale > 0 ? 1 / viewportScale : 1,
+      hasMoved: false,
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const handleFullscreenPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = fullscreenDragRef.current
+    if (drag.pointerId !== event.pointerId) {
+      return
+    }
+
+    const deltaX = event.clientX - drag.startX
+    const deltaY = event.clientY - drag.startY
+    if (Math.abs(deltaX) > FULLSCREEN_DRAG_THRESHOLD_PX || Math.abs(deltaY) > FULLSCREEN_DRAG_THRESHOLD_PX) {
+      drag.hasMoved = true
+    }
+
+    setFullscreenPan({
+      x: drag.originX + deltaX * drag.screenToSvg,
+      y: drag.originY + deltaY * drag.screenToSvg,
+    })
+  }
+
+  const handleFullscreenPointerEnd = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = fullscreenDragRef.current
+    if (drag.pointerId !== event.pointerId) {
+      return
+    }
+
+    suppressNextFullscreenClickRef.current = drag.hasMoved
+    fullscreenDragRef.current = {
+      pointerId: -1,
+      startX: 0,
+      startY: 0,
+      originX: 0,
+      originY: 0,
+      screenToSvg: 1,
+      hasMoved: false,
+    }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+
+  const getFullscreenViewportMetrics = useCallback((zoom: number, pan = fullscreenPan) => {
+    const safeZoom = Math.max(1, zoom)
+    const viewWidth = svgWidth / safeZoom
+    const viewHeight = svgHeight / safeZoom
+    const centerX = bounds.minX + svgWidth / 2 - pan.x
+    const centerY = bounds.minY + svgHeight / 2 - pan.y
+
+    return {
+      viewWidth,
+      viewHeight,
+      minX: centerX - viewWidth / 2,
+      minY: centerY - viewHeight / 2,
+    }
+  }, [bounds.minX, bounds.minY, fullscreenPan, svgHeight, svgWidth])
+
+  const getWheelDeltaPixels = useCallback((event: WheelEvent) => {
+    if (event.deltaMode === window.WheelEvent.DOM_DELTA_LINE) {
+      return {
+        x: event.deltaX * WHEEL_LINE_HEIGHT_PX,
+        y: event.deltaY * WHEEL_LINE_HEIGHT_PX,
+      }
+    }
+
+    if (event.deltaMode === window.WheelEvent.DOM_DELTA_PAGE) {
+      return {
+        x: event.deltaX * window.innerWidth,
+        y: event.deltaY * window.innerHeight,
+      }
+    }
+
+    return {
+      x: event.deltaX,
+      y: event.deltaY,
+    }
+  }, [])
+
+  const handleFullscreenWheel = useCallback((event: WheelEvent) => {
+    if (!isFullscreen) {
+      return
+    }
+
+    const rect = svgRef.current?.getBoundingClientRect()
+    if (!rect) {
+      return
+    }
+
+    event.preventDefault()
+    const currentZoom = Math.max(1, fullscreenZoom)
+    const currentView = getFullscreenViewportMetrics(currentZoom)
+    const viewportScale = Math.min(rect.width / currentView.viewWidth, rect.height / currentView.viewHeight)
+    if (!Number.isFinite(viewportScale) || viewportScale <= 0) {
+      return
+    }
+
+    if (event.ctrlKey || event.metaKey) {
+      if (!onFullscreenZoomChange) {
+        return
+      }
+
+      const direction = event.deltaY < 0 ? 1 : -1
+      const nextZoom = Math.max(1, currentZoom + direction * FULLSCREEN_WHEEL_ZOOM_STEP)
+      const renderedWidth = currentView.viewWidth * viewportScale
+      const renderedHeight = currentView.viewHeight * viewportScale
+      const offsetX = (rect.width - renderedWidth) / 2
+      const offsetY = (rect.height - renderedHeight) / 2
+      const focusX = clamp((event.clientX - rect.left - offsetX) / renderedWidth, 0, 1)
+      const focusY = clamp((event.clientY - rect.top - offsetY) / renderedHeight, 0, 1)
+      const focusSvgX = currentView.minX + focusX * currentView.viewWidth
+      const focusSvgY = currentView.minY + focusY * currentView.viewHeight
+      const nextViewWidth = svgWidth / nextZoom
+      const nextViewHeight = svgHeight / nextZoom
+      const baseCenterX = bounds.minX + svgWidth / 2
+      const baseCenterY = bounds.minY + svgHeight / 2
+
+      setFullscreenPan({
+        x: baseCenterX - focusSvgX + (focusX - 0.5) * nextViewWidth,
+        y: baseCenterY - focusSvgY + (focusY - 0.5) * nextViewHeight,
+      })
+      onFullscreenZoomChange(nextZoom)
+      return
+    }
+
+    const delta = getWheelDeltaPixels(event)
+    setFullscreenPan((current) => ({
+      x: current.x - delta.x / viewportScale,
+      y: current.y - delta.y / viewportScale,
+    }))
+  }, [
+    bounds.minX,
+    bounds.minY,
+    fullscreenZoom,
+    getFullscreenViewportMetrics,
+    getWheelDeltaPixels,
+    isFullscreen,
+    onFullscreenZoomChange,
+    svgHeight,
+    svgWidth,
+  ])
+
+  useEffect(() => {
+    const rootElement = fullscreenRootRef.current
+    if (!isFullscreen || !rootElement) {
+      return undefined
+    }
+
+    rootElement.addEventListener('wheel', handleFullscreenWheel, { passive: false })
+
+    return () => {
+      rootElement.removeEventListener('wheel', handleFullscreenWheel)
+    }
+  }, [handleFullscreenWheel, isFullscreen])
+
+  const previewSvg = (
+    <svg
+      ref={svgRef}
+      viewBox={runtimeViewBox}
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      aria-label="편집 JSON 기반 실시간 시뮬레이션 미리보기"
+      onClick={onClearSelection}
+      className={isFullscreen ? 'block' : 'block h-auto w-full min-w-0'}
+      style={isFullscreen ? {
+        width: '100vw',
+        height: '100dvh',
+        maxWidth: '100vw',
+        maxHeight: '100dvh',
+      } : { maxHeight: previewMaxHeight }}
+    >
+      <defs>
+        <filter id="urgent-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#ef4444" floodOpacity="0.9" />
+        </filter>
+        <filter id="selected-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="#f97316" floodOpacity="0.95" />
+          <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#7c2d12" floodOpacity="0.5" />
+        </filter>
+      </defs>
+      <rect
+        x={svgBounds.minX}
+        y={svgBounds.minY}
+        width={svgBounds.width}
+        height={layout.groundSurfaceY - svgBounds.minY}
+        fill="#e8f5ff"
+      />
+      <SoilBackground
+        minX={baseGroundBounds.left}
+        topY={baseGroundBounds.top}
+        width={baseGroundBounds.width}
+        height={baseGroundBounds.height}
+      />
+      <RelationGuideLayer relationLinks={relationLinks} nodesById={nodesById} />
+      <UpstreamExtensionLayer
+        nodes={sortedNodes}
+        bounds={bounds}
+        leftEndpointRelationNodeIds={leftEndpointRelationNodeIds}
+        editorObjects={snapshot?.editorObjects ?? null}
+        reverseFlowThreshold={reverseFlowThreshold}
+        animationSpeedMultiplier={animationSpeedMultiplier}
+      />
+      <SimulationNodeLayer
+        nodes={sortedNodes}
+        editorObjects={snapshot?.editorObjects ?? null}
+        selectedEditorId={selectedEditorId}
+        selectedPreviewNodeId={selectedPreviewNodeId}
+        blockageTargetByEditorId={blockageTargetByEditorId}
+        reverseFlowThreshold={reverseFlowThreshold}
+        animationSpeedMultiplier={animationSpeedMultiplier}
+        onSelectPreviewNode={onSelectPreviewNode}
+        onSelectBlockageTarget={onSelectBlockageTarget}
+      />
+      <RainOverlay bounds={svgBounds} groundSurfaceY={layout.groundSurfaceY} rainfallPercent={rainfallPercent} animationSpeedMultiplier={animationSpeedMultiplier} />
+      <ObjectLabelLayer nodes={sortedNodes} editorObjects={snapshot?.editorObjects ?? null} />
+    </svg>
+  )
+
+  if (isFullscreen) {
+    return (
+      <div
+        ref={fullscreenRootRef}
+        className="fixed inset-0 z-[90] flex touch-none cursor-grab items-center justify-center overflow-hidden bg-slate-950 active:cursor-grabbing"
+        onPointerDown={handleFullscreenPointerDown}
+        onPointerMove={handleFullscreenPointerMove}
+        onPointerUp={handleFullscreenPointerEnd}
+        onPointerCancel={handleFullscreenPointerEnd}
+        onClickCapture={(event) => {
+          if (suppressNextFullscreenClickRef.current) {
+            suppressNextFullscreenClickRef.current = false
+            event.preventDefault()
+            event.stopPropagation()
+          }
+        }}
+      >
+        <div
+          className="will-change-transform"
+        >
+          {previewSvg}
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className={isFullscreen
-      ? `fixed inset-0 z-[90] flex flex-col p-4 ${isDark ? 'bg-slate-950' : 'bg-slate-100'}`
-      : `mt-5 rounded-md border p-3 ${isDark ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'}`
-    }>
-      {isFullscreen ? fullscreenControlBar : null}
-      <div className={isFullscreen ? 'flex min-h-0 flex-1' : ''}>
-      {isFullscreen ? fullscreenInfoPanel : null}
-      <div className={isFullscreen ? 'flex min-w-0 flex-1 flex-col' : ''}>
+    <div className={`mt-5 rounded-md border p-3 ${isDark ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'}`}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className={`text-sm font-black ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>편집 JSON 런타임 뷰</h3>
@@ -2111,121 +2444,29 @@ export function SimulationLayoutPreview({
           <span className="rounded-full bg-slate-200 px-2 py-1 text-slate-600">
             {snapshot ? `tick ${snapshot.stepIndex}` : '엔진 대기'}
           </span>
-          {onToggleFullscreen ? (
-            <button
-              type="button"
-              onClick={onToggleFullscreen}
-              className={`rounded-md border px-3 py-1.5 text-[11px] font-black ${
-                isFullscreen
-                  ? isDark
-                    ? 'border-white/30 bg-white/10 text-white hover:bg-white/20'
-                    : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              {isFullscreen ? '전체화면 종료' : '시뮬레이션 전체화면'}
-            </button>
-          ) : null}
         </div>
       </div>
-      <div className={isFullscreen ? 'min-h-0 flex-1 overflow-hidden' : 'min-w-0'}>
-        <div className={isFullscreen ? 'h-full min-h-0' : 'min-w-0'}>
-          <div className={isFullscreen
-            ? `relative h-full overflow-auto rounded-md border ${isDark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-sky-50'}`
-            : `min-w-0 overflow-hidden rounded-md border ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-sky-50'}`
-          }>
-            {isFullscreen ? (
-              <div className="sticky left-3 top-3 z-20 inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-950/88 p-1 text-xs font-black text-white shadow-lg backdrop-blur">
-                <button
-                  type="button"
-                  onClick={() => setFullscreenZoom((current) => clampFullscreenZoom(current - FULLSCREEN_ZOOM_STEP))}
-                  className="rounded-md px-3 py-2 hover:bg-white/12 disabled:cursor-not-allowed disabled:text-slate-500"
-                  disabled={fullscreenZoom <= FULLSCREEN_ZOOM_MIN}
-                >
-                  축소
-                </button>
-                <span className="min-w-14 rounded bg-white/10 px-2 py-2 text-center text-[11px] text-slate-100">
-                  {fullscreenZoomPercent}%
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setFullscreenZoom((current) => clampFullscreenZoom(current + FULLSCREEN_ZOOM_STEP))}
-                  className="rounded-md px-3 py-2 hover:bg-white/12"
-                >
-                  확대
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFullscreenZoom(1)}
-                  className="rounded-md border border-white/15 px-3 py-2 hover:bg-white/12"
-                >
-                  초기화
-                </button>
-              </div>
+      <div className="min-w-0">
+        <div className="min-w-0">
+          <div className={`relative min-w-0 overflow-hidden rounded-md border px-2 py-16 sm:py-20 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-sky-50'}`}>
+            {previewSvg}
+            {onToggleFullscreen ? (
+              <button
+                type="button"
+                onClick={onToggleFullscreen}
+                aria-label="시뮬레이션 전체화면"
+                title="시뮬레이션 전체화면"
+                className={`absolute right-4 top-4 z-30 flex h-12 w-12 items-center justify-center rounded-full border shadow-xl backdrop-blur transition ${
+                  isDark
+                    ? 'border-white/20 bg-slate-950/88 text-white hover:bg-slate-900'
+                    : 'border-slate-200 bg-white/92 text-slate-800 hover:bg-slate-50'
+                }`}
+              >
+                <FullscreenToggleIcon isFullscreen={isFullscreen} />
+              </button>
             ) : null}
-            <svg
-              viewBox={`${bounds.minX} ${bounds.minY} ${svgWidth} ${svgHeight}`}
-              preserveAspectRatio="xMidYMid meet"
-              role="img"
-              aria-label="편집 JSON 기반 실시간 시뮬레이션 미리보기"
-              onClick={onClearSelection}
-              className={isFullscreen ? 'block max-w-none' : 'block h-auto w-full min-w-0'}
-              style={isFullscreen ? {
-                width: `${fullscreenZoom * 100}%`,
-                height: `${fullscreenZoom * 100}%`,
-                minWidth: '100%',
-                minHeight: '100%',
-              } : { maxHeight: previewMaxHeight }}
-            >
-              <defs>
-                <filter id="urgent-glow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#ef4444" floodOpacity="0.9" />
-                </filter>
-                <filter id="selected-glow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="#f97316" floodOpacity="0.95" />
-                  <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#7c2d12" floodOpacity="0.5" />
-                </filter>
-              </defs>
-              <rect
-                x={svgBounds.minX}
-                y={svgBounds.minY}
-                width={svgBounds.width}
-                height={layout.groundSurfaceY - svgBounds.minY}
-                fill="#e8f5ff"
-              />
-              <SoilBackground
-                minX={baseGroundBounds.left}
-                topY={baseGroundBounds.top}
-                width={baseGroundBounds.width}
-                height={baseGroundBounds.height}
-              />
-              <RelationGuideLayer relationLinks={relationLinks} nodesById={nodesById} />
-              <UpstreamExtensionLayer
-                nodes={sortedNodes}
-                bounds={bounds}
-                leftEndpointRelationNodeIds={leftEndpointRelationNodeIds}
-                editorObjects={snapshot?.editorObjects ?? null}
-                reverseFlowThreshold={reverseFlowThreshold}
-                animationSpeedMultiplier={animationSpeedMultiplier}
-              />
-              <SimulationNodeLayer
-                nodes={sortedNodes}
-                editorObjects={snapshot?.editorObjects ?? null}
-                selectedEditorId={selectedEditorId}
-                selectedPreviewNodeId={selectedPreviewNodeId}
-                blockageTargetByEditorId={blockageTargetByEditorId}
-                reverseFlowThreshold={reverseFlowThreshold}
-                animationSpeedMultiplier={animationSpeedMultiplier}
-                onSelectPreviewNode={onSelectPreviewNode}
-                onSelectBlockageTarget={onSelectBlockageTarget}
-              />
-              <RainOverlay bounds={svgBounds} groundSurfaceY={layout.groundSurfaceY} rainfallPercent={rainfallPercent} animationSpeedMultiplier={animationSpeedMultiplier} />
-              <ObjectLabelLayer nodes={sortedNodes} editorObjects={snapshot?.editorObjects ?? null} />
-            </svg>
           </div>
         </div>
-      </div>
-      </div>
       </div>
     </div>
   )

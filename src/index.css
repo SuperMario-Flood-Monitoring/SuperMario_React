@@ -12,6 +12,19 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+html,
+body {
+  background: #e2e8f0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root,
+  html,
+  body {
+    background: #020617;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

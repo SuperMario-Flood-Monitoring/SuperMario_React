@@ -167,9 +167,11 @@ import type {
   ResizeState,
 } from './editorInternalTypes'
 
-const EDITOR_ZOOM_MIN = 0.25
+const EDITOR_ZOOM_MIN = 1
 const EDITOR_ZOOM_STEP = 0.1
-const EDITOR_ZOOM_DEFAULT = 0.5
+const EDITOR_ZOOM_DEFAULT = 1
+const EDITOR_WHEEL_ZOOM_STEP = 0.12
+const EDITOR_WHEEL_LINE_HEIGHT_PX = 16
 
 // ---------------------------------------------------------------------------
 // relation 포트/attach 좌표 계산 helper
@@ -2714,6 +2716,40 @@ async function downloadSwmmInp(layout: EditorLayout) {
   return parseWarningHeader(getHeaderValue(response.headers['x-editor-inp-warnings']))
 }
 
+function GearIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7Z" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2.05 2.05 0 0 1-2.9 2.9l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2.05 2.05 0 0 1-4.1 0v-.09a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2.05 2.05 0 0 1-2.9-2.9l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2.05 2.05 0 0 1 0-4.1h.09A1.7 1.7 0 0 0 4.65 8.8a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2.05 2.05 0 0 1 2.9-2.9l.06.06a1.7 1.7 0 0 0 1.87.34h.01A1.7 1.7 0 0 0 10.12 2.8V2.7a2.05 2.05 0 0 1 4.1 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2.05 2.05 0 0 1 2.9 2.9l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.56 1.03h.09a2.05 2.05 0 0 1 0 4.1h-.09A1.7 1.7 0 0 0 19.4 15Z" />
+    </svg>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+    >
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  )
+}
 
 /** 배수도 편집 화면의 상태 연결, 편집 이벤트, SVG 렌더 조립을 담당하는 최상위 컴포넌트다. */
 export function EditorCanvas({
@@ -2753,8 +2789,11 @@ export function EditorCanvas({
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [isExportingInp, setIsExportingInp] = useState(false)
   const [isEditorInfoPanelOpen, setIsEditorInfoPanelOpen] = useState(false)
+  const [isEditorSettingsOpen, setIsEditorSettingsOpen] = useState(false)
+  const [isMobileInput, setIsMobileInput] = useState(false)
+  const [mobileMoveArmedNodeId, setMobileMoveArmedNodeId] = useState<string | null>(null)
   const [editorZoom, setEditorZoom] = useState(EDITOR_ZOOM_DEFAULT)
-  const [editorCanvasFitWidth, setEditorCanvasFitWidth] = useState(0)
+  const [editorPan, setEditorPan] = useState({ x: 0, y: 0 })
   const [scenarios, setScenarios] = useState<SwmmScenario[]>([])
   const [selectedScenario, setSelectedScenario] = useState<SwmmScenario | null>(null)
   const [scenarioEditBaseline, setScenarioEditBaseline] = useState<EditorLayout | null>(null)
@@ -2771,6 +2810,7 @@ export function EditorCanvas({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const editorCanvasViewportRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
+  const longPressTimerRef = useRef<number | null>(null)
   const suppressCoordinateEditFollowUpClickUntilRef = useRef(0)
   const nextNodeIndex = layout.nodes.length + 1
   const isScenarioReadOnly = Boolean(selectedScenario && !isScenarioEditMode)
@@ -2802,26 +2842,26 @@ export function EditorCanvas({
   }, [dragDraftPositionsByNodeId, nodesById, resizeDraftNodesById])
 
   useEffect(() => {
-    const element = editorCanvasViewportRef.current
-    if (!element) {
+    if (typeof window === 'undefined' || !window.matchMedia) {
       return undefined
     }
 
-    const updateFitWidth = () => {
-      setEditorCanvasFitWidth(Math.max(320, Math.floor(element.clientWidth - 48)))
-    }
+    const mediaQuery = window.matchMedia('(pointer: coarse), (max-width: 1023px)')
+    const syncInputMode = () => setIsMobileInput(mediaQuery.matches)
+    syncInputMode()
+    mediaQuery.addEventListener('change', syncInputMode)
 
-    updateFitWidth()
-
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateFitWidth)
-      return () => window.removeEventListener('resize', updateFitWidth)
-    }
-
-    const observer = new ResizeObserver(updateFitWidth)
-    observer.observe(element)
-    return () => observer.disconnect()
+    return () => mediaQuery.removeEventListener('change', syncInputMode)
   }, [])
+
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => clearLongPressTimer, [clearLongPressTimer])
 
   const resetEditorInteractionState = useCallback(() => {
     setSelection(null)
@@ -2834,6 +2874,7 @@ export function EditorCanvas({
     setResizeState(null)
     setResizeDraftNodesById(null)
     setMarqueeSelectionState(null)
+    setMobileMoveArmedNodeId(null)
   }, [])
 
   const refreshScenarios = useCallback(async () => {
@@ -3465,6 +3506,7 @@ export function EditorCanvas({
     setResizeState(null)
     setResizeDraftNodesById(null)
     setMarqueeSelectionState(null)
+    setMobileMoveArmedNodeId(null)
     commitLayoutHistoryBatch()
   }, [commitLayoutHistoryBatch])
 
@@ -3487,7 +3529,10 @@ export function EditorCanvas({
 
   const handleLinkSelect = useCallback((linkId: string) => {
     setSelection({ kind: 'link', id: linkId })
-  }, [])
+    if (!isMobileInput) {
+      setIsEditorInfoPanelOpen(true)
+    }
+  }, [isMobileInput])
 
   // 복사/붙여넣기는 현재 선택을 relation 그룹 단위로 확장한 뒤 새 ID로 복제한다.
   const copySelection = useCallback(() => {
@@ -3613,6 +3658,64 @@ export function EditorCanvas({
   }, [contextMenu])
 
   // 아래 함수들은 SVG 캔버스에서 직접 발생하는 pointer/context menu 액션의 진입점이다.
+  const scheduleMobileContextMenu = useCallback((
+    point: Point,
+    clientX: number,
+    clientY: number,
+    nodeId?: string,
+  ) => {
+    clearLongPressTimer()
+    longPressTimerRef.current = window.setTimeout(() => {
+      if (isScenarioReadOnly) {
+        return
+      }
+
+      if (typeof window.navigator.vibrate === 'function') {
+        window.navigator.vibrate(12)
+      }
+
+      if (nodeId && !(selection?.kind === 'multi' && selectedNodeIds.has(nodeId))) {
+        setSelection({ kind: 'node', id: nodeId })
+      }
+      setPendingPort(null)
+      setAttachTargetNodeId(null)
+      setCoordinateEditState(null)
+      setDragState(null)
+      setDragDraftPositionsByNodeId(null)
+      setResizeState(null)
+      setResizeDraftNodesById(null)
+      setMarqueeSelectionState(null)
+      setMobileMoveArmedNodeId(null)
+      setContextMenu({
+        x: clientX,
+        y: clientY,
+        point,
+        nodeId,
+      })
+      longPressTimerRef.current = null
+    }, 560)
+  }, [clearLongPressTimer, isScenarioReadOnly, selectedNodeIds, selection])
+
+  const openMobileNodeActionMenu = useCallback((node: EditorNode, point: Point, clientX: number, clientY: number) => {
+    setSelection({ kind: 'node', id: node.id })
+    setIsEditorInfoPanelOpen(false)
+    setMobileMoveArmedNodeId(null)
+    setPendingPort(null)
+    setAttachTargetNodeId(null)
+    setCoordinateEditState(null)
+    setDragState(null)
+    setDragDraftPositionsByNodeId(null)
+    setResizeState(null)
+    setResizeDraftNodesById(null)
+    setMarqueeSelectionState(null)
+    setContextMenu({
+      x: clientX,
+      y: clientY,
+      point,
+      nodeId: node.id,
+    })
+  }, [])
+
   const handleCanvasPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (event.button !== 0) {
       return
@@ -3625,6 +3728,31 @@ export function EditorCanvas({
 
     const cursor = getSvgCursor(event.currentTarget, event.clientX, event.clientY)
 
+    if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+      if (hasSelection && !mobileMoveArmedNodeId) {
+        event.preventDefault()
+        clearLongPressTimer()
+        setSelection(null)
+        setIsEditorInfoPanelOpen(false)
+        setMobileMoveArmedNodeId(null)
+        setPendingPort(null)
+        setAttachTargetNodeId(null)
+        setCoordinateEditState(null)
+        setContextMenu(null)
+        return
+      }
+
+      scheduleMobileContextMenu(cursor, event.clientX, event.clientY)
+      setSelection(null)
+      setIsEditorInfoPanelOpen(false)
+      setMobileMoveArmedNodeId(null)
+      setPendingPort(null)
+      setAttachTargetNodeId(null)
+      setCoordinateEditState(null)
+      setContextMenu(null)
+      return
+    }
+
     if (coordinateEditState) {
       suppressCoordinateEditFollowUpClick()
       updateCoordinateEditFromClientPoint(event.clientX, event.clientY)
@@ -3633,6 +3761,8 @@ export function EditorCanvas({
     }
 
     setSelection(null)
+    setIsEditorInfoPanelOpen(false)
+    setMobileMoveArmedNodeId(null)
     setPendingPort(null)
     setAttachTargetNodeId(null)
     setCoordinateEditState(null)
@@ -3913,6 +4043,7 @@ export function EditorCanvas({
 
   // pointer up/leave에서 좌표 변경, marquee, drag, resize batch를 확정한다.
   const finishPointerInteraction = useCallback(() => {
+    clearLongPressTimer()
     cancelCanvasPointerMove()
 
     if (coordinateEditState) {
@@ -3964,6 +4095,7 @@ export function EditorCanvas({
     commitLayoutHistoryBatch()
   }, [
     cancelCanvasPointerMove,
+    clearLongPressTimer,
     commitLayoutHistoryBatch,
     coordinateEditState,
     dragDraftPositionsByNodeId,
@@ -3986,8 +4118,16 @@ export function EditorCanvas({
 
   // pointer move는 현재 모드에 따라 좌표 변경, 영역 선택, resize, drag 중 하나만 수행한다.
   const handleCanvasPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+      clearLongPressTimer()
+    }
+
     if (isScenarioReadOnly || (!coordinateEditState && !marqueeSelectionState && !resizeState && !dragState)) {
       return
+    }
+
+    if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+      event.preventDefault()
     }
 
     scheduleCanvasPointerMove({
@@ -4067,6 +4207,21 @@ export function EditorCanvas({
     }
 
     const cursor = getSvgCursor(svg, event.clientX, event.clientY)
+    if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+      setIsEditorInfoPanelOpen(false)
+
+      if (mobileMoveArmedNodeId !== node.id) {
+        openMobileNodeActionMenu(node, cursor, event.clientX, event.clientY)
+        return
+      }
+
+      event.preventDefault()
+      svg.setPointerCapture(event.pointerId)
+      setIsEditorInfoPanelOpen(false)
+      setMobileMoveArmedNodeId(null)
+    } else if (event.pointerType === 'mouse' && !isMobileInput) {
+      setIsEditorInfoPanelOpen(true)
+    }
 
     if (coordinateEditState) {
       suppressCoordinateEditFollowUpClick()
@@ -4421,32 +4576,160 @@ export function EditorCanvas({
 
   // 렌더링에서만 쓰는 최종 UI 파생 상태다.
   const hasSelection = Boolean(selectedNode || selectedLink || selection?.kind === 'multi')
-  useEffect(() => {
-    if (hasSelection) {
-      const timerId = window.setTimeout(() => {
-        setIsEditorInfoPanelOpen(true)
-      }, 0)
-
-      return () => window.clearTimeout(timerId)
-    }
-
-    return undefined
-  }, [hasSelection])
-
   const marqueeRect = marqueeSelectionState
     ? normalizeRect(marqueeSelectionState.start, marqueeSelectionState.current)
     : null
-  const editorCanvasBaseWidth = editorCanvasFitWidth > 0 ? editorCanvasFitWidth : canvasWidth * EDITOR_ZOOM_DEFAULT
-  const editorCanvasRenderedWidth = editorCanvasBaseWidth * (editorZoom / EDITOR_ZOOM_DEFAULT)
-  const editorCanvasRenderedHeight = editorCanvasRenderedWidth * (canvasHeight / canvasWidth)
+  const editorViewBox = useMemo(() => {
+    const safeZoom = Math.max(EDITOR_ZOOM_MIN, editorZoom)
+    const viewWidth = canvasWidth / safeZoom
+    const viewHeight = canvasHeight / safeZoom
+    const centerX = canvasWidth / 2 - editorPan.x
+    const centerY = canvasHeight / 2 - editorPan.y
+
+    return `${centerX - viewWidth / 2} ${centerY - viewHeight / 2} ${viewWidth} ${viewHeight}`
+  }, [canvasHeight, canvasWidth, editorPan.x, editorPan.y, editorZoom])
 
   const updateEditorZoom = (delta: number) => {
     setEditorZoom((current) => Math.max(EDITOR_ZOOM_MIN, current + delta))
   }
 
+  const getEditorViewportMetrics = useCallback((zoom: number, pan = editorPan) => {
+    const safeZoom = Math.max(EDITOR_ZOOM_MIN, zoom)
+    const viewWidth = canvasWidth / safeZoom
+    const viewHeight = canvasHeight / safeZoom
+    const centerX = canvasWidth / 2 - pan.x
+    const centerY = canvasHeight / 2 - pan.y
+
+    return {
+      viewWidth,
+      viewHeight,
+      minX: centerX - viewWidth / 2,
+      minY: centerY - viewHeight / 2,
+    }
+  }, [canvasHeight, canvasWidth, editorPan])
+
+  const getEditorWheelDeltaPixels = useCallback((event: WheelEvent) => {
+    if (event.deltaMode === window.WheelEvent.DOM_DELTA_LINE) {
+      return {
+        x: event.deltaX * EDITOR_WHEEL_LINE_HEIGHT_PX,
+        y: event.deltaY * EDITOR_WHEEL_LINE_HEIGHT_PX,
+      }
+    }
+
+    if (event.deltaMode === window.WheelEvent.DOM_DELTA_PAGE) {
+      return {
+        x: event.deltaX * window.innerWidth,
+        y: event.deltaY * window.innerHeight,
+      }
+    }
+
+    return {
+      x: event.deltaX,
+      y: event.deltaY,
+    }
+  }, [])
+
+  const setAnchoredEditorZoom = useCallback((nextZoomValue: number, anchor?: { clientX: number; clientY: number }) => {
+    const nextZoom = Math.max(EDITOR_ZOOM_MIN, nextZoomValue)
+    const viewport = editorCanvasViewportRef.current
+    if (!viewport || !anchor) {
+      setEditorZoom(nextZoom)
+      return
+    }
+
+    const rect = viewport.getBoundingClientRect()
+    const currentZoom = Math.max(EDITOR_ZOOM_MIN, editorZoom)
+    const currentView = getEditorViewportMetrics(currentZoom)
+    const viewportScale = Math.min(rect.width / currentView.viewWidth, rect.height / currentView.viewHeight)
+    if (!Number.isFinite(viewportScale) || viewportScale <= 0) {
+      setEditorZoom(nextZoom)
+      return
+    }
+
+    const renderedWidth = currentView.viewWidth * viewportScale
+    const renderedHeight = currentView.viewHeight * viewportScale
+    const offsetX = (rect.width - renderedWidth) / 2
+    const offsetY = (rect.height - renderedHeight) / 2
+    const focusX = clampNumber((anchor.clientX - rect.left - offsetX) / renderedWidth, 0, 1)
+    const focusY = clampNumber((anchor.clientY - rect.top - offsetY) / renderedHeight, 0, 1)
+    const focusSvgX = currentView.minX + focusX * currentView.viewWidth
+    const focusSvgY = currentView.minY + focusY * currentView.viewHeight
+    const nextViewWidth = canvasWidth / nextZoom
+    const nextViewHeight = canvasHeight / nextZoom
+    setEditorZoom(nextZoom)
+    setEditorPan({
+      x: canvasWidth / 2 - focusSvgX + (focusX - 0.5) * nextViewWidth,
+      y: canvasHeight / 2 - focusSvgY + (focusY - 0.5) * nextViewHeight,
+    })
+  }, [canvasHeight, canvasWidth, editorZoom, getEditorViewportMetrics])
+
+  useEffect(() => {
+    const viewport = editorCanvasViewportRef.current
+    if (!viewport || isMobileInput) {
+      return undefined
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      const rect = viewport.getBoundingClientRect()
+      const currentView = getEditorViewportMetrics(editorZoom)
+      const viewportScale = Math.min(rect.width / currentView.viewWidth, rect.height / currentView.viewHeight)
+      if (!Number.isFinite(viewportScale) || viewportScale <= 0) {
+        return
+      }
+
+      if (!event.ctrlKey && !event.metaKey) {
+        event.preventDefault()
+        const delta = getEditorWheelDeltaPixels(event)
+        setEditorPan((current) => ({
+          x: current.x - delta.x / viewportScale,
+          y: current.y - delta.y / viewportScale,
+        }))
+        return
+      }
+
+      event.preventDefault()
+      const direction = event.deltaY > 0 ? -1 : 1
+      setAnchoredEditorZoom(editorZoom + direction * EDITOR_WHEEL_ZOOM_STEP, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+      })
+    }
+
+    viewport.addEventListener('wheel', handleWheel, { passive: false })
+    return () => viewport.removeEventListener('wheel', handleWheel)
+  }, [editorZoom, getEditorViewportMetrics, getEditorWheelDeltaPixels, isMobileInput, setAnchoredEditorZoom])
+
   const toggleEditorInfoPanel = useCallback(() => {
     setIsEditorInfoPanelOpen((current) => !current)
   }, [])
+
+  const actionToolbar = (
+    <EditorActionToolbar
+      isDark={isDark}
+      controlBarClassName={themeTokens.controlBar}
+      panelMutedClassName={themeTokens.panelMuted}
+      buttonClassName={themeTokens.button}
+      buttonMutedClassName={themeTokens.buttonMuted}
+      editorZoom={editorZoom}
+      zoomStep={EDITOR_ZOOM_STEP}
+      canUndo={canUndo}
+      canRedo={canRedo}
+      isScenarioReadOnly={isScenarioReadOnly}
+      isScenarioEditMode={isScenarioEditMode}
+      isExportingInp={isExportingInp}
+      swmmEngineUrl={SWMM_ENGINE_URL}
+      fileInputRef={fileInputRef}
+      onZoomChange={updateEditorZoom}
+      onZoomReset={() => setEditorZoom(EDITOR_ZOOM_DEFAULT)}
+      onUndo={undoEditorLayout}
+      onRedo={redoEditorLayout}
+      onExportJson={() => downloadLayout(layout)}
+      onExportInp={handleExportSwmmInp}
+      onImport={handleImport}
+      onResetLayout={resetLayout}
+      isSheet
+    />
+  )
 
   const scenarioToolbar = (
     <EditorScenarioToolbar
@@ -4471,6 +4754,200 @@ export function EditorCanvas({
       onBeginScenarioEdit={beginScenarioEdit}
     />
   )
+  const editorSettingsSheet = isEditorSettingsOpen ? (
+    <div
+      className={`fixed inset-0 z-[220] flex bg-slate-950/55 ${isMobileInput ? 'items-end' : 'items-stretch justify-end'}`}
+      onClick={() => setIsEditorSettingsOpen(false)}
+    >
+      <section
+        className={`${isMobileInput ? 'max-h-[86vh] w-screen rounded-t-2xl border-t' : 'h-screen w-[460px] max-w-[92vw] border-l'} overflow-hidden shadow-2xl ${
+          isDark ? 'border-slate-800 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="editor-settings-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className={`flex items-center justify-between gap-3 border-b px-5 py-4 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          <div>
+            <h2 id="editor-settings-title" className="text-base font-black">편집 세팅</h2>
+            <p className={`mt-1 text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              시나리오와 JSON/INP 입출력을 관리합니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsEditorSettingsOpen(false)}
+            className={`flex h-10 w-10 items-center justify-center rounded-full border ${
+              isDark ? 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-white'
+            }`}
+            aria-label="편집 세팅 닫기"
+            title="닫기"
+          >
+            <CloseIcon />
+          </button>
+        </header>
+        <div className={`${isMobileInput ? 'max-h-[calc(86vh-85px)]' : 'h-[calc(100vh-85px)]'} overflow-y-auto`}>
+          {scenarioToolbar}
+          {actionToolbar}
+        </div>
+      </section>
+    </div>
+  ) : null
+  const editorInfoPanelContent = (
+    <>
+      {hasSelection ? (
+        <>
+          <p className={`mt-2 text-sm font-semibold leading-6 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+            현재 편집 상태는 localStorage에 자동 저장됩니다. 내보낸 JSON은 다음 단계의 SWMM 모델/React 렌더링
+            기준 데이터로 사용할 수 있습니다.
+          </p>
+
+          <div className={`mt-5 rounded-lg border p-3 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-300 bg-slate-200/70'}`}>
+            <div className={`text-xs font-black ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>포트 연결 상태</div>
+            <div className={`mt-1 text-sm font-black ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+              {coordinateEditState
+                ? `좌표 변경 중 (${coordinateEditAxis === 'x' ? 'x축' : coordinateEditAxis === 'y' ? 'y축' : '축 미확인'})`
+                : pendingPort
+                ? `${pendingPort.nodeId} / ${pendingPort.portId} 선택됨`
+                : selection?.kind === 'multi'
+                ? `${selectedNodeIds.size}개 객체 선택됨`
+                : '첫 번째 포트를 선택하세요'}
+            </div>
+            {coordinateEditState ? (
+              <div className="mt-2 text-xs font-semibold leading-5 text-blue-700">
+                마우스를 움직여 붙는 위치를 조정하고, 원하는 위치에서 한 번 클릭하면 종료됩니다.
+              </div>
+            ) : null}
+          </div>
+
+          {selection?.kind === 'multi' ? (
+            <div className="mt-5 rounded-lg border border-blue-100 bg-blue-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-black text-slate-800">여러 객체 선택</h3>
+                <button
+                  type="button"
+                  onClick={deleteSelection}
+                  className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-black text-rose-700 hover:bg-white"
+                >
+                  삭제
+                </button>
+              </div>
+              <p className="mt-2 text-sm font-bold leading-6 text-blue-700">
+                {selectedNodeIds.size}개 객체가 선택되었습니다. 드래그하면 선택된 relation 그룹 전체가 함께 이동하고,
+                Command/Ctrl + C, Command/Ctrl + V로 복사/붙여넣기할 수 있습니다.
+              </p>
+            </div>
+          ) : (
+            <SelectionPanel
+              theme={theme}
+              node={selectedNode}
+              link={selectedLink}
+              connectedLinks={selectedConnectedLinks}
+              groundSurfaceY={layout.groundSurfaceY}
+              onUpdateNode={updateNode}
+              onRotateNode={rotateNodeClockwise}
+              onUpdateLink={updateLink}
+              onUpdateLinkProps={updateLinkProps}
+              onDeleteSelection={deleteSelection}
+            />
+          )}
+        </>
+      ) : null}
+
+      <div className="mt-5">
+        <h3 className="text-sm font-black">모델 요약</h3>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <SummaryCard theme={theme} label="nodes" value={layout.nodes.length} />
+          <SummaryCard theme={theme} label="links" value={layout.links.length} />
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <h3 className="text-sm font-black">drainage-layout.json</h3>
+        <textarea
+          readOnly
+          value={JSON.stringify(layout, null, 2)}
+          className="mt-2 h-72 w-full resize-none rounded-lg border border-slate-200 bg-slate-950 p-3 font-mono text-[11px] leading-5 text-slate-100"
+        />
+      </div>
+    </>
+  )
+  const editorInfoSheet = isMobileInput && isEditorInfoPanelOpen ? (
+    <div
+      className="fixed inset-0 z-[220] flex items-end bg-slate-950/55"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="editor-info-sheet-title"
+      onClick={() => setIsEditorInfoPanelOpen(false)}
+    >
+      <section
+        className={`max-h-[86vh] w-screen overflow-hidden rounded-t-2xl border-t shadow-2xl ${
+          isDark ? 'border-slate-800 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
+        }`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex justify-center px-5 pt-3">
+          <span className={`h-1.5 w-12 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
+        </div>
+        <header className={`flex items-center justify-between gap-3 border-b px-5 py-4 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          <h2 id="editor-info-sheet-title" className="text-base font-black">편집 정보</h2>
+          <button
+            type="button"
+            onClick={() => setIsEditorInfoPanelOpen(false)}
+            className={`flex h-10 w-10 items-center justify-center rounded-full border ${
+              isDark ? 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-white'
+            }`}
+            aria-label="편집 정보 닫기"
+            title="닫기"
+          >
+            <CloseIcon />
+          </button>
+        </header>
+        <div className="max-h-[calc(86vh-96px)] overflow-y-auto px-5 py-4">
+          {editorInfoPanelContent}
+        </div>
+      </section>
+    </div>
+  ) : null
+  const editorZoomRatio = editorZoom / EDITOR_ZOOM_DEFAULT
+  const editorZoomControls = (
+    <div className="fixed right-4 top-24 z-[130] inline-flex overflow-hidden rounded-md border border-white/15 bg-slate-950/88 text-white shadow-xl backdrop-blur lg:top-28">
+      {editorZoomRatio > 1.001 ? (
+        <button
+          type="button"
+          onClick={() => setEditorZoom((current) => Math.max(EDITOR_ZOOM_DEFAULT, current - EDITOR_ZOOM_STEP))}
+          aria-label="편집 캔버스 축소"
+          title="축소"
+          className="flex h-11 w-12 items-center justify-center border-r border-white/10 text-xl font-black leading-none transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300"
+        >
+          -
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => {
+          setEditorZoom(EDITOR_ZOOM_DEFAULT)
+          setEditorPan({ x: 0, y: 0 })
+        }}
+        aria-label="편집 캔버스 확대 초기화"
+        title="확대 초기화"
+        disabled={editorZoomRatio <= 1.001}
+        className="flex h-11 w-12 items-center justify-center border-r border-white/10 text-sm font-black leading-none transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300 disabled:cursor-not-allowed disabled:text-slate-500 disabled:opacity-70"
+      >
+        1x
+      </button>
+      <button
+        type="button"
+        onClick={() => setEditorZoom((current) => current + EDITOR_ZOOM_STEP)}
+        aria-label="편집 캔버스 확대"
+        title="확대"
+        className="flex h-11 w-12 items-center justify-center text-xl font-black leading-none transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300"
+      >
+        +
+      </button>
+    </div>
+  )
   const renderResizeHandles = useCallback((
     node: EditorNode,
     onResizePointerDown: (node: EditorNode, edge: ResizeEdge, event: ReactPointerEvent<SVGRectElement>) => void,
@@ -4480,143 +4957,45 @@ export function EditorCanvas({
 
   return (
     <>
-      <section className="relative flex min-h-screen min-w-0 items-stretch p-4" data-swmm-theme={theme}>
-      <InlineInfoPanel
-        theme={theme}
-        title="편집 정보"
-        isOpen={isEditorInfoPanelOpen}
-        controls={{
-          isInfoPanelOpen: isEditorInfoPanelOpen,
-          toggleInfoPanel: toggleEditorInfoPanel,
-        }}
-      >
-        {hasSelection ? (
-          <>
-            <p className={`mt-2 text-sm font-semibold leading-6 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-              현재 편집 상태는 localStorage에 자동 저장됩니다. 내보낸 JSON은 다음 단계의 SWMM 모델/React 렌더링
-              기준 데이터로 사용할 수 있습니다.
-            </p>
-
-            <div className={`mt-5 rounded-lg border p-3 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-300 bg-slate-200/70'}`}>
-              <div className={`text-xs font-black ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>포트 연결 상태</div>
-              <div className={`mt-1 text-sm font-black ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
-                {coordinateEditState
-                  ? `좌표 변경 중 (${coordinateEditAxis === 'x' ? 'x축' : coordinateEditAxis === 'y' ? 'y축' : '축 미확인'})`
-                  : pendingPort
-                  ? `${pendingPort.nodeId} / ${pendingPort.portId} 선택됨`
-                  : selection?.kind === 'multi'
-                  ? `${selectedNodeIds.size}개 객체 선택됨`
-                  : '첫 번째 포트를 선택하세요'}
-              </div>
-              {coordinateEditState ? (
-                <div className="mt-2 text-xs font-semibold leading-5 text-blue-700">
-                  마우스를 움직여 붙는 위치를 조정하고, 원하는 위치에서 한 번 클릭하면 종료됩니다.
-                </div>
-              ) : null}
-            </div>
-
-            {selection?.kind === 'multi' ? (
-              <div className="mt-5 rounded-lg border border-blue-100 bg-blue-50 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-black text-slate-800">여러 객체 선택</h3>
-                  <button
-                    type="button"
-                    onClick={deleteSelection}
-                    className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-black text-rose-700 hover:bg-white"
-                  >
-                    삭제
-                  </button>
-                </div>
-                <p className="mt-2 text-sm font-bold leading-6 text-blue-700">
-                  {selectedNodeIds.size}개 객체가 선택되었습니다. 드래그하면 선택된 relation 그룹 전체가 함께 이동하고,
-                  Command/Ctrl + C, Command/Ctrl + V로 복사/붙여넣기할 수 있습니다.
-                </p>
-              </div>
-            ) : (
-              <SelectionPanel
-                node={selectedNode}
-                link={selectedLink}
-                connectedLinks={selectedConnectedLinks}
-                groundSurfaceY={layout.groundSurfaceY}
-                onUpdateNode={updateNode}
-                onRotateNode={rotateNodeClockwise}
-                onUpdateLink={updateLink}
-                onUpdateLinkProps={updateLinkProps}
-                onDeleteSelection={deleteSelection}
-              />
-            )}
-          </>
-        ) : null}
-
-        <div className="mt-5">
-          <h3 className="text-sm font-black">모델 요약</h3>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <SummaryCard label="nodes" value={layout.nodes.length} />
-            <SummaryCard label="links" value={layout.links.length} />
-          </div>
+      <section className={`relative flex h-screen min-w-0 flex-col ${renderHeader ? 'box-border pt-[90px] lg:pt-[86px]' : ''}`} data-swmm-theme={theme}>
+      {renderHeader ? (
+        <div className="fixed left-0 right-0 top-0 z-[180] w-full">
+          {renderHeader({
+            isInfoPanelOpen: isEditorInfoPanelOpen,
+            toggleInfoPanel: toggleEditorInfoPanel,
+          })}
         </div>
+      ) : null}
+      <div className="flex min-h-0 min-w-0 flex-1 items-stretch">
+        {editorZoomControls}
+        <InlineInfoPanel
+          theme={theme}
+          title="편집 정보"
+          isOpen={!isMobileInput && isEditorInfoPanelOpen}
+          controls={{
+            isInfoPanelOpen: isEditorInfoPanelOpen,
+            toggleInfoPanel: toggleEditorInfoPanel,
+          }}
+        >
+          {editorInfoPanelContent}
+        </InlineInfoPanel>
 
-        <div className="mt-5">
-          <h3 className="text-sm font-black">drainage-layout.json</h3>
-          <textarea
-            readOnly
-            value={JSON.stringify(layout, null, 2)}
-            className="mt-2 h-72 w-full resize-none rounded-lg border border-slate-200 bg-slate-950 p-3 font-mono text-[11px] leading-5 text-slate-100"
-          />
-        </div>
-      </InlineInfoPanel>
-
-      <div className="flex h-[calc(100vh-32px)] min-h-[640px] min-w-0 flex-1 flex-col gap-4">
-      {renderHeader ? renderHeader({
-        isInfoPanelOpen: isEditorInfoPanelOpen,
-        toggleInfoPanel: toggleEditorInfoPanel,
-      }) : null}
-      <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border shadow-sm ${themeTokens.panel}`}>
-        <EditorActionToolbar
-          isDark={isDark}
-          controlBarClassName={themeTokens.controlBar}
-          panelMutedClassName={themeTokens.panelMuted}
-          buttonClassName={themeTokens.button}
-          buttonMutedClassName={themeTokens.buttonMuted}
-          editorZoom={editorZoom}
-          zoomStep={EDITOR_ZOOM_STEP}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          isScenarioReadOnly={isScenarioReadOnly}
-          isScenarioEditMode={isScenarioEditMode}
-          isExportingInp={isExportingInp}
-          swmmEngineUrl={SWMM_ENGINE_URL}
-          fileInputRef={fileInputRef}
-          onZoomChange={updateEditorZoom}
-          onZoomReset={() => setEditorZoom(EDITOR_ZOOM_DEFAULT)}
-          onUndo={undoEditorLayout}
-          onRedo={redoEditorLayout}
-          onExportJson={() => downloadLayout(layout)}
-          onExportInp={handleExportSwmmInp}
-          onImport={handleImport}
-          onResetLayout={resetLayout}
-        />
-
-        {scenarioToolbar}
-
+        <div className="flex min-h-[640px] min-w-0 flex-1 flex-col">
+        <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${themeTokens.panel}`}>
         <div
           ref={editorCanvasViewportRef}
-          className={`relative min-h-0 min-w-0 flex-1 overflow-auto p-6 ${
+          className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${
             isDark ? 'bg-slate-900' : 'bg-sky-50'
           }`}
         >
           <div
-            className="mx-auto"
-            style={{
-              width: editorCanvasRenderedWidth,
-            }}
+            className="h-full w-full"
           >
           <svg
             ref={svgRef}
-            viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
-            width={editorCanvasRenderedWidth}
-            height={editorCanvasRenderedHeight}
-            className={`block max-w-none rounded-md border border-dashed ${
+            viewBox={editorViewBox}
+            preserveAspectRatio="xMidYMid meet"
+            className={`block h-full w-full max-w-none border border-dashed ${
               isDark ? 'border-slate-700 bg-slate-900/80' : 'border-slate-300 bg-sky-50'
             } ${
               coordinateEditAxis === 'x'
@@ -4627,6 +5006,7 @@ export function EditorCanvas({
             }`}
             role="img"
             aria-label="배수도 편집 캔버스"
+            style={{ touchAction: 'none' }}
             onPointerDown={handleCanvasPointerDown}
             onContextMenu={handleCanvasContextMenu}
             onPointerMove={handleCanvasPointerMove}
@@ -4730,18 +5110,82 @@ export function EditorCanvas({
               onPortContextMenu={handlePortContextMenu}
               onResizePointerDown={handlePipeResizePointerDown}
             />
+            {selectedNodeIds.size > 0 ? (
+              <g pointerEvents="none">
+                {layout.nodes.map((node) => {
+                  if (!selectedNodeIds.has(node.id)) {
+                    return null
+                  }
+
+                  const renderNode = renderNodesById.get(node.id) ?? node
+                  const glowPadding = 10
+                  const strokePadding = 5
+
+                  return (
+                    <g key={`${node.id}-top-selection-outline`}>
+                      <rect
+                        x={renderNode.x - glowPadding}
+                        y={renderNode.y - glowPadding}
+                        width={renderNode.width + glowPadding * 2}
+                        height={renderNode.height + glowPadding * 2}
+                        rx="14"
+                        fill="none"
+                        stroke="#fb923c"
+                        strokeWidth="10"
+                        opacity="0.24"
+                      />
+                      <rect
+                        x={renderNode.x - strokePadding}
+                        y={renderNode.y - strokePadding}
+                        width={renderNode.width + strokePadding * 2}
+                        height={renderNode.height + strokePadding * 2}
+                        rx="10"
+                        fill="none"
+                        stroke="#ea580c"
+                        strokeWidth="4"
+                        opacity="0.96"
+                      />
+                    </g>
+                  )
+                })}
+              </g>
+            ) : null}
           </svg>
           </div>
         </div>
       </div>
       </div>
+      </div>
+      {!isEditorSettingsOpen ? (
+        <button
+          type="button"
+          onClick={() => setIsEditorSettingsOpen(true)}
+          aria-label="편집 세팅"
+          title="편집 세팅"
+          className="fixed bottom-5 right-8 z-[120] flex h-12 w-12 items-center justify-center rounded-full border border-blue-300 bg-blue-600 text-white shadow-xl backdrop-blur transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 lg:right-10"
+        >
+          <GearIcon />
+        </button>
+      ) : null}
+      {editorSettingsSheet}
+      {editorInfoSheet}
     </section>
     {contextMenu ? (
       <EditorContextMenu
+        key={`${contextMenu.nodeId ?? 'canvas'}-${contextMenu.relationPort?.linkId ?? 'none'}-${contextMenu.layoutAdd ? 'layout' : 'menu'}-${contextMenu.x}-${contextMenu.y}`}
         contextMenu={contextMenu}
         canStartCoordinateEdit={Boolean(
           contextMenu.nodeId && getCoordinateEditableTeeRelationInfo(layout, contextMenu.nodeId),
         )}
+        isMobileSheet={isMobileInput}
+        theme={theme}
+        onOpenInfoPanel={() => setIsEditorInfoPanelOpen(true)}
+        onStartNodeMove={() => {
+          if (contextMenu.nodeId) {
+            setSelection({ kind: 'node', id: contextMenu.nodeId })
+            setMobileMoveArmedNodeId(contextMenu.nodeId)
+          }
+        }}
         onChangeNodeZOrder={changeContextNodeZOrder}
         onStartTeeCoordinateEdit={startContextTeeCoordinateEdit}
         onAddLayoutNode={addLayoutNode}
