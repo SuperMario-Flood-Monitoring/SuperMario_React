@@ -23,6 +23,7 @@ export function EditorContextMenu({
   onStartTeeCoordinateEdit,
   onOpenInfoPanel,
   onStartNodeMove,
+  onStartNodeResize,
   onAddLayoutNode,
   onDetachRelation,
   onAddNode,
@@ -37,6 +38,7 @@ export function EditorContextMenu({
   onStartTeeCoordinateEdit: () => void
   onOpenInfoPanel?: () => void
   onStartNodeMove?: () => void
+  onStartNodeResize?: () => void
   onAddLayoutNode: (kind: LayoutAddKind, source: NonNullable<ContextMenuState['layoutAdd']>) => void
   onDetachRelation: () => void
   onAddNode: (type: EditorNodeType, point: Point) => void
@@ -143,6 +145,16 @@ export function EditorContextMenu({
             className={`block w-full px-5 py-3 text-left text-base font-black ${blueItemClassName}`}
           >
             객체이동
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onStartNodeResize?.()
+              onClose()
+            }}
+            className={`block w-full px-5 py-3 text-left text-base font-black ${blueItemClassName}`}
+          >
+            크기 조절
           </button>
         </>
       )}

@@ -172,6 +172,7 @@ const EDITOR_ZOOM_STEP = 0.1
 const EDITOR_ZOOM_DEFAULT = 1
 const EDITOR_WHEEL_ZOOM_STEP = 0.12
 const EDITOR_WHEEL_LINE_HEIGHT_PX = 16
+type MobileEditorInteractionMode = 'idle' | 'move' | 'resize'
 
 // ---------------------------------------------------------------------------
 // relation 포트/attach 좌표 계산 helper
@@ -2792,6 +2793,8 @@ export function EditorCanvas({
   const [isEditorSettingsOpen, setIsEditorSettingsOpen] = useState(false)
   const [isMobileInput, setIsMobileInput] = useState(false)
   const [mobileMoveArmedNodeId, setMobileMoveArmedNodeId] = useState<string | null>(null)
+  const [mobileEditorMode, setMobileEditorMode] = useState<MobileEditorInteractionMode>('idle')
+  const [mobileActiveNodeId, setMobileActiveNodeId] = useState<string | null>(null)
   const [editorZoom, setEditorZoom] = useState(EDITOR_ZOOM_DEFAULT)
   const [editorPan, setEditorPan] = useState({ x: 0, y: 0 })
   const [scenarios, setScenarios] = useState<SwmmScenario[]>([])
@@ -2811,6 +2814,34 @@ export function EditorCanvas({
   const editorCanvasViewportRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const longPressTimerRef = useRef<number | null>(null)
+  const mobileCanvasPanRef = useRef<{
+    pointerId: number
+    lastClientX: number
+    lastClientY: number
+  } | null>(null)
+  const mobileCanvasPanDeltaRef = useRef({ x: 0, y: 0 })
+  const mobileCanvasPanFrameRef = useRef<number | null>(null)
+  const mobileTouchPointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(new Map())
+  const mobilePinchZoomRef = useRef<{
+    startDistance: number
+    startZoom: number
+  } | null>(null)
+  const anchoredEditorZoomRef = useRef<(
+    nextZoomValue: number,
+    anchor?: { clientX: number; clientY: number }
+  ) => void>(() => {})
+  const latestCanvasPointerMoveRef = useRef<{
+    svg: SVGSVGElement
+    clientX: number
+    clientY: number
+  } | null>(null)
+  const mobileNodeMoveRef = useRef<{
+    pointerId: number
+    groupNodeIds: string[]
+    hasFixedYNode: boolean
+    lastCursor: Point
+  } | null>(null)
+  const mobileMoveArmedNodeIdRef = useRef<string | null>(null)
   const suppressCoordinateEditFollowUpClickUntilRef = useRef(0)
   const nextNodeIndex = layout.nodes.length + 1
   const isScenarioReadOnly = Boolean(selectedScenario && !isScenarioEditMode)
@@ -2863,6 +2894,16 @@ export function EditorCanvas({
 
   useEffect(() => clearLongPressTimer, [clearLongPressTimer])
 
+  useEffect(() => () => {
+    if (mobileCanvasPanFrameRef.current !== null) {
+      window.cancelAnimationFrame(mobileCanvasPanFrameRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    mobileMoveArmedNodeIdRef.current = mobileMoveArmedNodeId
+  }, [mobileMoveArmedNodeId])
+
   const resetEditorInteractionState = useCallback(() => {
     setSelection(null)
     setPendingPort(null)
@@ -2874,7 +2915,10 @@ export function EditorCanvas({
     setResizeState(null)
     setResizeDraftNodesById(null)
     setMarqueeSelectionState(null)
+    mobileMoveArmedNodeIdRef.current = null
     setMobileMoveArmedNodeId(null)
+    setMobileEditorMode('idle')
+    setMobileActiveNodeId(null)
   }, [])
 
   const refreshScenarios = useCallback(async () => {
@@ -3506,7 +3550,10 @@ export function EditorCanvas({
     setResizeState(null)
     setResizeDraftNodesById(null)
     setMarqueeSelectionState(null)
+    mobileMoveArmedNodeIdRef.current = null
     setMobileMoveArmedNodeId(null)
+    setMobileEditorMode('idle')
+    setMobileActiveNodeId(null)
     commitLayoutHistoryBatch()
   }, [commitLayoutHistoryBatch])
 
@@ -3685,7 +3732,10 @@ export function EditorCanvas({
       setResizeState(null)
       setResizeDraftNodesById(null)
       setMarqueeSelectionState(null)
+      mobileMoveArmedNodeIdRef.current = null
       setMobileMoveArmedNodeId(null)
+      setMobileEditorMode('idle')
+      setMobileActiveNodeId(null)
       setContextMenu({
         x: clientX,
         y: clientY,
@@ -3699,7 +3749,10 @@ export function EditorCanvas({
   const openMobileNodeActionMenu = useCallback((node: EditorNode, point: Point, clientX: number, clientY: number) => {
     setSelection({ kind: 'node', id: node.id })
     setIsEditorInfoPanelOpen(false)
+    mobileMoveArmedNodeIdRef.current = null
     setMobileMoveArmedNodeId(null)
+    setMobileEditorMode('idle')
+    setMobileActiveNodeId(node.id)
     setPendingPort(null)
     setAttachTargetNodeId(null)
     setCoordinateEditState(null)
@@ -3716,6 +3769,52 @@ export function EditorCanvas({
     })
   }, [])
 
+  const getMobilePinchPair = () => {
+    const pointers = Array.from(mobileTouchPointersRef.current.values())
+    if (pointers.length < 2) {
+      return null
+    }
+
+    const [first, second] = pointers
+    const dx = second.clientX - first.clientX
+    const dy = second.clientY - first.clientY
+    const distance = Math.hypot(dx, dy)
+
+    return {
+      distance,
+      midpoint: {
+        clientX: (first.clientX + second.clientX) / 2,
+        clientY: (first.clientY + second.clientY) / 2,
+      },
+    }
+  }
+
+  const beginMobilePinchZoomIfReady = (event: ReactPointerEvent<SVGSVGElement | SVGGElement>) => {
+    if (event.pointerType !== 'touch' && event.pointerType !== 'pen') {
+      return false
+    }
+
+    mobileTouchPointersRef.current.set(event.pointerId, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+    })
+
+    const pinchPair = getMobilePinchPair()
+    if (!pinchPair || pinchPair.distance <= 0) {
+      return false
+    }
+
+    event.preventDefault()
+    clearLongPressTimer()
+    mobileCanvasPanRef.current = null
+    mobilePinchZoomRef.current = {
+      startDistance: pinchPair.distance,
+      startZoom: editorZoom,
+    }
+    setContextMenu(null)
+    return true
+  }
+
   const handleCanvasPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (event.button !== 0) {
       return
@@ -3729,12 +3828,20 @@ export function EditorCanvas({
     const cursor = getSvgCursor(event.currentTarget, event.clientX, event.clientY)
 
     if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+      if (beginMobilePinchZoomIfReady(event)) {
+        event.currentTarget.setPointerCapture(event.pointerId)
+        return
+      }
+
       if (hasSelection && !mobileMoveArmedNodeId) {
         event.preventDefault()
         clearLongPressTimer()
         setSelection(null)
         setIsEditorInfoPanelOpen(false)
+        mobileMoveArmedNodeIdRef.current = null
         setMobileMoveArmedNodeId(null)
+        setMobileEditorMode('idle')
+        setMobileActiveNodeId(null)
         setPendingPort(null)
         setAttachTargetNodeId(null)
         setCoordinateEditState(null)
@@ -3743,9 +3850,18 @@ export function EditorCanvas({
       }
 
       scheduleMobileContextMenu(cursor, event.clientX, event.clientY)
+      event.currentTarget.setPointerCapture(event.pointerId)
+      mobileCanvasPanRef.current = {
+        pointerId: event.pointerId,
+        lastClientX: event.clientX,
+        lastClientY: event.clientY,
+      }
       setSelection(null)
       setIsEditorInfoPanelOpen(false)
+      mobileMoveArmedNodeIdRef.current = null
       setMobileMoveArmedNodeId(null)
+      setMobileEditorMode('idle')
+      setMobileActiveNodeId(null)
       setPendingPort(null)
       setAttachTargetNodeId(null)
       setCoordinateEditState(null)
@@ -3762,7 +3878,10 @@ export function EditorCanvas({
 
     setSelection(null)
     setIsEditorInfoPanelOpen(false)
+    mobileMoveArmedNodeIdRef.current = null
     setMobileMoveArmedNodeId(null)
+    setMobileEditorMode('idle')
+    setMobileActiveNodeId(null)
     setPendingPort(null)
     setAttachTargetNodeId(null)
     setCoordinateEditState(null)
@@ -4042,9 +4161,49 @@ export function EditorCanvas({
   } = useRafCoalescedCallback(processCanvasPointerMove)
 
   // pointer up/leave에서 좌표 변경, marquee, drag, resize batch를 확정한다.
-  const finishPointerInteraction = useCallback(() => {
+  const finishPointerInteraction = useCallback((event?: ReactPointerEvent<SVGSVGElement>) => {
     clearLongPressTimer()
+    const finalPointerMove = event?.currentTarget
+      ? {
+          svg: event.currentTarget,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        }
+      : latestCanvasPointerMoveRef.current
+    let finalDragDraftPositionsByNodeId = dragDraftPositionsByNodeId
+    let finalResizeDraftNodesById = resizeDraftNodesById
+
+    if (finalPointerMove && !isScenarioReadOnly) {
+      const cursor = getSvgCursor(finalPointerMove.svg, finalPointerMove.clientX, finalPointerMove.clientY)
+      if (dragState) {
+        finalDragDraftPositionsByNodeId = createDragDraftPositions(
+          layout,
+          dragState,
+          cursor.x - dragState.offsetX,
+          cursor.y - dragState.offsetY,
+        )
+      } else if (resizeState) {
+        finalResizeDraftNodesById = createResizeDraftNodes(layout, resizeState, getResizeEdgeCursor(resizeState, cursor))
+      }
+    }
+    latestCanvasPointerMoveRef.current = null
     cancelCanvasPointerMove()
+    if (mobileCanvasPanFrameRef.current !== null) {
+      window.cancelAnimationFrame(mobileCanvasPanFrameRef.current)
+      mobileCanvasPanFrameRef.current = null
+      const pendingPanDelta = mobileCanvasPanDeltaRef.current
+      mobileCanvasPanDeltaRef.current = { x: 0, y: 0 }
+      if (pendingPanDelta.x !== 0 || pendingPanDelta.y !== 0) {
+        setEditorPan((current) => ({
+          x: current.x + pendingPanDelta.x,
+          y: current.y + pendingPanDelta.y,
+        }))
+      }
+    }
+    mobileCanvasPanRef.current = null
+    mobileNodeMoveRef.current = null
+    mobilePinchZoomRef.current = null
+    mobileTouchPointersRef.current.clear()
 
     if (coordinateEditState) {
       suppressCoordinateEditFollowUpClick()
@@ -4074,14 +4233,14 @@ export function EditorCanvas({
       return
     }
 
-    if (dragState && dragDraftPositionsByNodeId) {
-      setLayout((currentLayout) => applyDragDraftPositions(currentLayout, dragDraftPositionsByNodeId), {
+    if (dragState && finalDragDraftPositionsByNodeId) {
+      setLayout((currentLayout) => applyDragDraftPositions(currentLayout, finalDragDraftPositionsByNodeId), {
         recordHistory: false,
       })
     }
 
-    if (resizeState && resizeDraftNodesById) {
-      setLayout((currentLayout) => applyResizeDraftNodes(currentLayout, resizeDraftNodesById), {
+    if (resizeState && finalResizeDraftNodesById) {
+      setLayout((currentLayout) => applyResizeDraftNodes(currentLayout, finalResizeDraftNodesById), {
         recordHistory: false,
       })
     }
@@ -4100,6 +4259,7 @@ export function EditorCanvas({
     coordinateEditState,
     dragDraftPositionsByNodeId,
     dragState,
+    isScenarioReadOnly,
     layout,
     marqueeSelectionState,
     resizeDraftNodesById,
@@ -4113,13 +4273,97 @@ export function EditorCanvas({
       return
     }
 
+    if (dragState || resizeState || mobilePinchZoomRef.current || mobileNodeMoveRef.current) {
+      return
+    }
+
     finishPointerInteraction()
-  }, [coordinateEditState, finishPointerInteraction])
+  }, [coordinateEditState, dragState, finishPointerInteraction, resizeState])
 
   // pointer move는 현재 모드에 따라 좌표 변경, 영역 선택, resize, drag 중 하나만 수행한다.
   const handleCanvasPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (event.pointerType === 'touch' || event.pointerType === 'pen') {
       clearLongPressTimer()
+      mobileTouchPointersRef.current.set(event.pointerId, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+      })
+    }
+
+    if ((event.pointerType === 'touch' || event.pointerType === 'pen') && mobilePinchZoomRef.current) {
+      event.preventDefault()
+      const pinchPair = getMobilePinchPair()
+      if (!pinchPair || mobilePinchZoomRef.current.startDistance <= 0) {
+        return
+      }
+
+      const nextZoom = mobilePinchZoomRef.current.startZoom * (pinchPair.distance / mobilePinchZoomRef.current.startDistance)
+      anchoredEditorZoomRef.current(nextZoom, pinchPair.midpoint)
+      return
+    }
+
+    if (
+      (event.pointerType === 'touch' || event.pointerType === 'pen') &&
+      mobileNodeMoveRef.current?.pointerId === event.pointerId
+    ) {
+      event.preventDefault()
+      const cursor = getSvgCursor(event.currentTarget, event.clientX, event.clientY)
+      const moveState = mobileNodeMoveRef.current
+      const dx = cursor.x - moveState.lastCursor.x
+      const dy = moveState.hasFixedYNode ? 0 : cursor.y - moveState.lastCursor.y
+      mobileNodeMoveRef.current = {
+        ...moveState,
+        lastCursor: cursor,
+      }
+
+      if (dx !== 0 || dy !== 0) {
+        setLayout(
+          (currentLayout) => moveNodeIdsBy(currentLayout, moveState.groupNodeIds, dx, dy),
+          { recordHistory: false },
+        )
+      }
+      return
+    }
+
+    if (
+      (event.pointerType === 'touch' || event.pointerType === 'pen') &&
+      mobileCanvasPanRef.current?.pointerId === event.pointerId &&
+      !coordinateEditState &&
+      !marqueeSelectionState &&
+      !resizeState &&
+      !dragState
+    ) {
+      event.preventDefault()
+      const rect = event.currentTarget.getBoundingClientRect()
+      const currentView = getEditorViewportMetrics(editorZoom)
+      const viewportScale = Math.min(rect.width / currentView.viewWidth, rect.height / currentView.viewHeight)
+      if (Number.isFinite(viewportScale) && viewportScale > 0) {
+        const deltaX = event.clientX - mobileCanvasPanRef.current.lastClientX
+        const deltaY = event.clientY - mobileCanvasPanRef.current.lastClientY
+        mobileCanvasPanDeltaRef.current = {
+          x: mobileCanvasPanDeltaRef.current.x + deltaX / viewportScale,
+          y: mobileCanvasPanDeltaRef.current.y + deltaY / viewportScale,
+        }
+
+        if (mobileCanvasPanFrameRef.current === null) {
+          mobileCanvasPanFrameRef.current = window.requestAnimationFrame(() => {
+            const delta = mobileCanvasPanDeltaRef.current
+            mobileCanvasPanDeltaRef.current = { x: 0, y: 0 }
+            mobileCanvasPanFrameRef.current = null
+            setEditorPan((current) => ({
+              x: current.x + delta.x,
+              y: current.y + delta.y,
+            }))
+          })
+        }
+      }
+
+      mobileCanvasPanRef.current = {
+        pointerId: event.pointerId,
+        lastClientX: event.clientX,
+        lastClientY: event.clientY,
+      }
+      return
     }
 
     if (isScenarioReadOnly || (!coordinateEditState && !marqueeSelectionState && !resizeState && !dragState)) {
@@ -4130,11 +4374,13 @@ export function EditorCanvas({
       event.preventDefault()
     }
 
-    scheduleCanvasPointerMove({
+    const pointerMovePayload = {
       svg: event.currentTarget,
       clientX: event.clientX,
       clientY: event.clientY,
-    })
+    }
+    latestCanvasPointerMoveRef.current = pointerMovePayload
+    scheduleCanvasPointerMove(pointerMovePayload)
   }
 
   // attach 모드의 두 번째 선택을 검증하고, snap 후 relation 링크 생성까지 마무리한다.
@@ -4209,8 +4455,16 @@ export function EditorCanvas({
     const cursor = getSvgCursor(svg, event.clientX, event.clientY)
     if (event.pointerType === 'touch' || event.pointerType === 'pen') {
       setIsEditorInfoPanelOpen(false)
+      if (beginMobilePinchZoomIfReady(event)) {
+        svg.setPointerCapture(event.pointerId)
+        return
+      }
 
-      if (mobileMoveArmedNodeId !== node.id) {
+      const armedNodeId = mobileEditorMode === 'move'
+        ? mobileActiveNodeId
+        : mobileMoveArmedNodeIdRef.current ?? mobileMoveArmedNodeId
+
+      if (armedNodeId !== node.id) {
         openMobileNodeActionMenu(node, cursor, event.clientX, event.clientY)
         return
       }
@@ -4218,7 +4472,25 @@ export function EditorCanvas({
       event.preventDefault()
       svg.setPointerCapture(event.pointerId)
       setIsEditorInfoPanelOpen(false)
+      mobileMoveArmedNodeIdRef.current = null
       setMobileMoveArmedNodeId(null)
+      setMobileEditorMode('move')
+      setMobileActiveNodeId(node.id)
+      const groupNodeIds = getRelationGroupNodeIds(layout, node.id)
+      const groupNodeIdSet = new Set(groupNodeIds)
+      const hasFixedYNode = layout.nodes.some((candidate) => groupNodeIdSet.has(candidate.id) && isFixedYNode(candidate))
+      beginLayoutHistoryBatch()
+      mobileNodeMoveRef.current = {
+        pointerId: event.pointerId,
+        groupNodeIds,
+        hasFixedYNode,
+        lastCursor: cursor,
+      }
+      setDragState(null)
+      setDragDraftPositionsByNodeId(null)
+      setResizeState(null)
+      setResizeDraftNodesById(null)
+      return
     } else if (event.pointerType === 'mouse' && !isMobileInput) {
       setIsEditorInfoPanelOpen(true)
     }
@@ -4295,6 +4567,14 @@ export function EditorCanvas({
     }
 
     event.stopPropagation()
+    if (
+      (event.pointerType === 'touch' || event.pointerType === 'pen') &&
+      (mobileEditorMode !== 'resize' || mobileActiveNodeId !== node.id)
+    ) {
+      event.preventDefault()
+      return
+    }
+
     if (isScenarioReadOnly) {
       setSelection({ kind: 'node', id: node.id })
       return
@@ -4664,6 +4944,10 @@ export function EditorCanvas({
   }, [canvasHeight, canvasWidth, editorZoom, getEditorViewportMetrics])
 
   useEffect(() => {
+    anchoredEditorZoomRef.current = setAnchoredEditorZoom
+  }, [setAnchoredEditorZoom])
+
+  useEffect(() => {
     const viewport = editorCanvasViewportRef.current
     if (!viewport || isMobileInput) {
       return undefined
@@ -4910,6 +5194,42 @@ export function EditorCanvas({
       </section>
     </div>
   ) : null
+  const mobileEditorModeHud = isMobileInput && mobileEditorMode !== 'idle' && mobileActiveNodeId ? (
+    <div
+      className={`fixed left-4 right-4 top-24 z-[135] flex items-center justify-between gap-3 rounded-xl border px-4 py-3 shadow-xl backdrop-blur ${
+        isDark
+          ? 'border-blue-400/30 bg-slate-950/90 text-slate-100'
+          : 'border-blue-200 bg-white/95 text-slate-900'
+      }`}
+    >
+      <div>
+        <div className="text-sm font-black">
+          {mobileEditorMode === 'move' ? '객체 이동 모드' : '크기 조절 모드'}
+        </div>
+        <div className={`mt-0.5 text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          {mobileEditorMode === 'move'
+            ? '선택한 객체를 드래그해서 이동합니다.'
+            : '선택한 객체의 파란 영역을 잡아 크기를 조절합니다.'}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          mobileMoveArmedNodeIdRef.current = null
+          setMobileMoveArmedNodeId(null)
+          setMobileEditorMode('idle')
+          setMobileActiveNodeId(null)
+        }}
+        className={`shrink-0 rounded-lg border px-3 py-2 text-xs font-black ${
+          isDark
+            ? 'border-slate-700 bg-slate-900 text-slate-100'
+            : 'border-slate-200 bg-slate-50 text-slate-700'
+        }`}
+      >
+        완료
+      </button>
+    </div>
+  ) : null
   const editorZoomRatio = editorZoom / EDITOR_ZOOM_DEFAULT
   const editorZoomControls = (
     <div className="fixed right-4 top-24 z-[130] inline-flex overflow-hidden rounded-md border border-white/15 bg-slate-950/88 text-white shadow-xl backdrop-blur lg:top-28">
@@ -4951,9 +5271,17 @@ export function EditorCanvas({
   const renderResizeHandles = useCallback((
     node: EditorNode,
     onResizePointerDown: (node: EditorNode, edge: ResizeEdge, event: ReactPointerEvent<SVGRectElement>) => void,
-  ) => (
-    <PipeResizeHandles node={node} onResizePointerDown={onResizePointerDown} />
-  ), [])
+  ) => {
+    if (isMobileInput && (mobileEditorMode !== 'resize' || mobileActiveNodeId !== node.id)) {
+      return null
+    }
+
+    return (
+      <g className={isMobileInput ? '[&>rect]:opacity-100' : undefined}>
+        <PipeResizeHandles node={node} onResizePointerDown={onResizePointerDown} />
+      </g>
+    )
+  }, [isMobileInput, mobileActiveNodeId, mobileEditorMode])
 
   return (
     <>
@@ -5011,6 +5339,7 @@ export function EditorCanvas({
             onContextMenu={handleCanvasContextMenu}
             onPointerMove={handleCanvasPointerMove}
             onPointerUp={finishPointerInteraction}
+            onPointerCancel={finishPointerInteraction}
             onPointerLeave={handleCanvasPointerLeave}
           >
             <SoilBackground
@@ -5169,6 +5498,7 @@ export function EditorCanvas({
       ) : null}
       {editorSettingsSheet}
       {editorInfoSheet}
+      {mobileEditorModeHud}
     </section>
     {contextMenu ? (
       <EditorContextMenu
@@ -5183,7 +5513,19 @@ export function EditorCanvas({
         onStartNodeMove={() => {
           if (contextMenu.nodeId) {
             setSelection({ kind: 'node', id: contextMenu.nodeId })
+            mobileMoveArmedNodeIdRef.current = contextMenu.nodeId
             setMobileMoveArmedNodeId(contextMenu.nodeId)
+            setMobileEditorMode('move')
+            setMobileActiveNodeId(contextMenu.nodeId)
+          }
+        }}
+        onStartNodeResize={() => {
+          if (contextMenu.nodeId) {
+            setSelection({ kind: 'node', id: contextMenu.nodeId })
+            mobileMoveArmedNodeIdRef.current = null
+            setMobileMoveArmedNodeId(null)
+            setMobileEditorMode('resize')
+            setMobileActiveNodeId(contextMenu.nodeId)
           }
         }}
         onChangeNodeZOrder={changeContextNodeZOrder}
