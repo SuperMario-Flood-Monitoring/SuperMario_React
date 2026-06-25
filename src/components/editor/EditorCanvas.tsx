@@ -2819,8 +2819,6 @@ export function EditorCanvas({
     lastClientX: number
     lastClientY: number
   } | null>(null)
-  const mobileCanvasPanDeltaRef = useRef({ x: 0, y: 0 })
-  const mobileCanvasPanFrameRef = useRef<number | null>(null)
   const mobileTouchPointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(new Map())
   const mobilePinchZoomRef = useRef<{
     startDistance: number
@@ -2893,12 +2891,6 @@ export function EditorCanvas({
   }, [])
 
   useEffect(() => clearLongPressTimer, [clearLongPressTimer])
-
-  useEffect(() => () => {
-    if (mobileCanvasPanFrameRef.current !== null) {
-      window.cancelAnimationFrame(mobileCanvasPanFrameRef.current)
-    }
-  }, [])
 
   useEffect(() => {
     mobileMoveArmedNodeIdRef.current = mobileMoveArmedNodeId
@@ -4188,18 +4180,6 @@ export function EditorCanvas({
     }
     latestCanvasPointerMoveRef.current = null
     cancelCanvasPointerMove()
-    if (mobileCanvasPanFrameRef.current !== null) {
-      window.cancelAnimationFrame(mobileCanvasPanFrameRef.current)
-      mobileCanvasPanFrameRef.current = null
-      const pendingPanDelta = mobileCanvasPanDeltaRef.current
-      mobileCanvasPanDeltaRef.current = { x: 0, y: 0 }
-      if (pendingPanDelta.x !== 0 || pendingPanDelta.y !== 0) {
-        setEditorPan((current) => ({
-          x: current.x + pendingPanDelta.x,
-          y: current.y + pendingPanDelta.y,
-        }))
-      }
-    }
     mobileCanvasPanRef.current = null
     mobileNodeMoveRef.current = null
     mobilePinchZoomRef.current = null
@@ -4340,21 +4320,11 @@ export function EditorCanvas({
       if (Number.isFinite(viewportScale) && viewportScale > 0) {
         const deltaX = event.clientX - mobileCanvasPanRef.current.lastClientX
         const deltaY = event.clientY - mobileCanvasPanRef.current.lastClientY
-        mobileCanvasPanDeltaRef.current = {
-          x: mobileCanvasPanDeltaRef.current.x + deltaX / viewportScale,
-          y: mobileCanvasPanDeltaRef.current.y + deltaY / viewportScale,
-        }
-
-        if (mobileCanvasPanFrameRef.current === null) {
-          mobileCanvasPanFrameRef.current = window.requestAnimationFrame(() => {
-            const delta = mobileCanvasPanDeltaRef.current
-            mobileCanvasPanDeltaRef.current = { x: 0, y: 0 }
-            mobileCanvasPanFrameRef.current = null
-            setEditorPan((current) => ({
-              x: current.x + delta.x,
-              y: current.y + delta.y,
-            }))
-          })
+        if (deltaX !== 0 || deltaY !== 0) {
+          setEditorPan((current) => ({
+            x: current.x + deltaX / viewportScale,
+            y: current.y + deltaY / viewportScale,
+          }))
         }
       }
 
