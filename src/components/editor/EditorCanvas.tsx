@@ -2814,11 +2814,6 @@ export function EditorCanvas({
   const editorCanvasViewportRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const longPressTimerRef = useRef<number | null>(null)
-  const mobileCanvasPanRef = useRef<{
-    pointerId: number
-    lastClientX: number
-    lastClientY: number
-  } | null>(null)
   const mobileTouchPointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(new Map())
   const mobilePinchZoomRef = useRef<{
     startDistance: number
@@ -3798,7 +3793,6 @@ export function EditorCanvas({
 
     event.preventDefault()
     clearLongPressTimer()
-    mobileCanvasPanRef.current = null
     mobilePinchZoomRef.current = {
       startDistance: pinchPair.distance,
       startZoom: editorZoom,
@@ -3842,12 +3836,6 @@ export function EditorCanvas({
       }
 
       scheduleMobileContextMenu(cursor, event.clientX, event.clientY)
-      event.currentTarget.setPointerCapture(event.pointerId)
-      mobileCanvasPanRef.current = {
-        pointerId: event.pointerId,
-        lastClientX: event.clientX,
-        lastClientY: event.clientY,
-      }
       setSelection(null)
       setIsEditorInfoPanelOpen(false)
       mobileMoveArmedNodeIdRef.current = null
@@ -4180,7 +4168,6 @@ export function EditorCanvas({
     }
     latestCanvasPointerMoveRef.current = null
     cancelCanvasPointerMove()
-    mobileCanvasPanRef.current = null
     mobileNodeMoveRef.current = null
     mobilePinchZoomRef.current = null
     mobileTouchPointersRef.current.clear()
@@ -4301,37 +4288,6 @@ export function EditorCanvas({
           (currentLayout) => moveNodeIdsBy(currentLayout, moveState.groupNodeIds, dx, dy),
           { recordHistory: false },
         )
-      }
-      return
-    }
-
-    if (
-      (event.pointerType === 'touch' || event.pointerType === 'pen') &&
-      mobileCanvasPanRef.current?.pointerId === event.pointerId &&
-      !coordinateEditState &&
-      !marqueeSelectionState &&
-      !resizeState &&
-      !dragState
-    ) {
-      event.preventDefault()
-      const rect = event.currentTarget.getBoundingClientRect()
-      const currentView = getEditorViewportMetrics(editorZoom)
-      const viewportScale = Math.min(rect.width / currentView.viewWidth, rect.height / currentView.viewHeight)
-      if (Number.isFinite(viewportScale) && viewportScale > 0) {
-        const deltaX = event.clientX - mobileCanvasPanRef.current.lastClientX
-        const deltaY = event.clientY - mobileCanvasPanRef.current.lastClientY
-        if (deltaX !== 0 || deltaY !== 0) {
-          setEditorPan((current) => ({
-            x: current.x + deltaX / viewportScale,
-            y: current.y + deltaY / viewportScale,
-          }))
-        }
-      }
-
-      mobileCanvasPanRef.current = {
-        pointerId: event.pointerId,
-        lastClientX: event.clientX,
-        lastClientY: event.clientY,
       }
       return
     }
@@ -4838,6 +4794,14 @@ export function EditorCanvas({
 
     return `${centerX - viewWidth / 2} ${centerY - viewHeight / 2} ${viewWidth} ${viewHeight}`
   }, [canvasHeight, canvasWidth, editorPan.x, editorPan.y, editorZoom])
+  const mobileScrollViewBox = useMemo(() => {
+    const viewWidth = canvasWidth / EDITOR_ZOOM_DEFAULT
+    const viewHeight = canvasHeight / EDITOR_ZOOM_DEFAULT
+    const centerX = canvasWidth / 2
+    const centerY = canvasHeight / 2
+
+    return `${centerX - viewWidth / 2} ${centerY - viewHeight / 2} ${viewWidth} ${viewHeight}`
+  }, [canvasHeight, canvasWidth])
 
   const updateEditorZoom = (delta: number) => {
     setEditorZoom((current) => Math.max(EDITOR_ZOOM_MIN, current + delta))
@@ -5201,6 +5165,8 @@ export function EditorCanvas({
     </div>
   ) : null
   const editorZoomRatio = editorZoom / EDITOR_ZOOM_DEFAULT
+  const mobileCanvasScale = isMobileInput ? Math.max(1, editorZoomRatio) : 1
+  const renderedEditorViewBox = isMobileInput ? mobileScrollViewBox : editorViewBox
   const editorZoomControls = (
     <div className="fixed right-4 top-24 z-[130] inline-flex overflow-hidden rounded-md border border-white/15 bg-slate-950/88 text-white shadow-xl backdrop-blur lg:top-28">
       {editorZoomRatio > 1.001 ? (
@@ -5282,16 +5248,22 @@ export function EditorCanvas({
         <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${themeTokens.panel}`}>
         <div
           ref={editorCanvasViewportRef}
-          className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${
+          className={`relative min-h-0 min-w-0 flex-1 ${
             isDark ? 'bg-slate-900' : 'bg-sky-50'
-          }`}
+          } ${isMobileInput ? 'overflow-auto overscroll-contain' : 'overflow-hidden'}`}
         >
           <div
             className="h-full w-full"
+            style={isMobileInput ? {
+              minWidth: '100%',
+              minHeight: '100%',
+              width: `${mobileCanvasScale * 100}%`,
+              height: `${mobileCanvasScale * 100}%`,
+            } : undefined}
           >
           <svg
             ref={svgRef}
-            viewBox={editorViewBox}
+            viewBox={renderedEditorViewBox}
             preserveAspectRatio="xMidYMid meet"
             className={`block h-full w-full max-w-none border border-dashed ${
               isDark ? 'border-slate-700 bg-slate-900/80' : 'border-slate-300 bg-sky-50'
@@ -5304,7 +5276,7 @@ export function EditorCanvas({
             }`}
             role="img"
             aria-label="배수도 편집 캔버스"
-            style={{ touchAction: 'none' }}
+            style={{ touchAction: isMobileInput ? 'pan-x pan-y' : 'none' }}
             onPointerDown={handleCanvasPointerDown}
             onContextMenu={handleCanvasContextMenu}
             onPointerMove={handleCanvasPointerMove}
