@@ -1,4 +1,4 @@
-import type { EditorLayout } from '../../components/editor/editorTypes'
+import type { EditorLayout } from '../../shared/editor/editorTypes'
 import type { SwmmEngineControl, SwmmRealtimeSnapshot } from './dto'
 
 export interface SwmmRuntimeMappingLink {

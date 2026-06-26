@@ -1,0 +1,120 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index ae2db59..e3af827 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -1,7 +1,9 @@
+-import { DrainageWorkbench } from './components/layout/DrainageWorkbench'
+-import type { WorkbenchMode } from './components/layout/DrainageWorkbench'
+-import { LoginPage } from './components/auth/LoginPage'
+-import { useCallback, useEffect, useState } from 'react'
++import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
++import {
++  getInitialAppSurface,
++  subscribeAppSurfaceChange,
++  type AppSurface,
++} from './app/deviceSurface'
+ import { loginWithPassword, logoutFromServer } from './services/auth/authApi'
+ import {
+   clearAuthState,
+@@ -10,6 +12,20 @@ import {
+   type AuthSession,
+ } from './services/auth/authState'
+ 
++const MobileDrainageWorkbench = lazy(() => import('./mobile/layout/DrainageWorkbench').then((module) => ({
++  default: module.DrainageWorkbench,
++})))
++const MobileLoginPage = lazy(() => import('./mobile/auth/LoginPage').then((module) => ({
++  default: module.LoginPage,
++})))
++const WebDrainageWorkbench = lazy(() => import('./web/layout/DrainageWorkbench').then((module) => ({
++  default: module.DrainageWorkbench,
++})))
++const WebLoginPage = lazy(() => import('./web/auth/LoginPage').then((module) => ({
++  default: module.LoginPage,
++})))
++
++type WorkbenchMode = 'simulation' | 'editor'
+ type AppRoute = 'login' | WorkbenchMode
+ const ROUTE_PATHS: Record<AppRoute, string> = {
+   login: '/login',
+@@ -39,6 +55,7 @@ function getInitialRoute() {
+ function App() {
+   const [route, setRoute] = useState<AppRoute>(() => getInitialRoute())
+   const [authSession, setAuthSession] = useState<AuthSession | null>(() => loadAuthSession())
++  const [surface, setSurface] = useState<AppSurface>(() => getInitialAppSurface())
+ 
+   const navigate = useCallback((nextRoute: AppRoute, options?: { replace?: boolean }) => {
+     const nextPath = ROUTE_PATHS[nextRoute]
+@@ -55,6 +72,10 @@ function App() {
+     setRoute(nextRoute)
+   }, [])
+ 
++  useEffect(() => {
++    return subscribeAppSurfaceChange(setSurface)
++  }, [])
++
+   useEffect(() => {
+     const syncRouteFromHistory = () => {
+       const nextRoute = routeFromPathname(window.location.pathname)
+@@ -97,16 +118,25 @@ function App() {
+     navigate('login', { replace: true })
+   }
+ 
++  const LoginPage = surface === 'mobile' ? MobileLoginPage : WebLoginPage
++  const DrainageWorkbench = surface === 'mobile' ? MobileDrainageWorkbench : WebDrainageWorkbench
++
+   if (!authSession) {
+-    return <LoginPage onLogin={handleLogin} />
++    return (
++      <Suspense fallback={null}>
++        <LoginPage onLogin={handleLogin} />
++      </Suspense>
++    )
+   }
+ 
+   return (
+-    <DrainageWorkbench
+-      mode={route === 'editor' ? 'editor' : 'simulation'}
+-      onModeChange={(nextMode) => navigate(nextMode)}
+-      onLogout={handleLogout}
+-    />
++    <Suspense fallback={null}>
++      <DrainageWorkbench
++        mode={route === 'editor' ? 'editor' : 'simulation'}
++        onModeChange={(nextMode) => navigate(nextMode)}
++        onLogout={handleLogout}
++      />
++    </Suspense>
+   )
+ }
+ 
+diff --git a/src/services/swmm/client.ts b/src/services/swmm/client.ts
+index 8937940..45a8dfa 100644
+--- a/src/services/swmm/client.ts
++++ b/src/services/swmm/client.ts
+@@ -1,4 +1,4 @@
+-import type { EditorLayout } from '../../components/editor/editorTypes'
++import type { EditorLayout } from '../../shared/editor/editorTypes'
+ import { apiClient, joinApiUrl } from '../http/apiClient'
+ import type {
+   EngineControlResponse,
+diff --git a/src/services/swmm/dto.ts b/src/services/swmm/dto.ts
+index 7e9341d..37d7753 100644
+--- a/src/services/swmm/dto.ts
++++ b/src/services/swmm/dto.ts
+@@ -1,4 +1,4 @@
+-import type { EditorLayout } from '../../components/editor/editorTypes'
++import type { EditorLayout } from '../../shared/editor/editorTypes'
+ 
+ export type SwmmSourceOfTruth = 'SWMM'
+ export type SwmmFlowDirection = 'forward' | 'reverse'
+diff --git a/src/services/swmm/editorRuntime.ts b/src/services/swmm/editorRuntime.ts
+index cb4bc0c..4643ec5 100644
+--- a/src/services/swmm/editorRuntime.ts
++++ b/src/services/swmm/editorRuntime.ts
+@@ -1,4 +1,4 @@
+-import type { EditorLayout } from '../../components/editor/editorTypes'
++import type { EditorLayout } from '../../shared/editor/editorTypes'
+ import type { SwmmEngineControl, SwmmRealtimeSnapshot } from './dto'
+ 
+ export interface SwmmRuntimeMappingLink {

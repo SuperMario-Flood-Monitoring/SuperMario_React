@@ -1,0 +1,10 @@
+ M src/components/editor/EditorActionToolbar.tsx
+ M src/components/editor/EditorCanvas.tsx
+ M src/components/editor/EditorContextMenu.tsx
+ M src/components/editor/EditorScenarioToolbar.tsx
+ M src/components/editor/editorInternalTypes.ts
+ M src/components/layout/InfoPanelLayout.tsx
+ M src/components/simulation/SimulationLayoutPreview.tsx
+ M src/components/simulation/SimulationWorkbench.tsx
+?? .codex/
+?? src/components/simulation/pngExport.ts

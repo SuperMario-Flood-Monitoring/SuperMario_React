@@ -1,4 +1,4 @@
-import type { EditorLayout } from '../../components/editor/editorTypes'
+import type { EditorLayout } from '../../shared/editor/editorTypes'
 
 export type SwmmSourceOfTruth = 'SWMM'
 export type SwmmFlowDirection = 'forward' | 'reverse'
