@@ -2111,7 +2111,24 @@ export function SimulationLayoutPreview({
   const suppressNextFullscreenClickRef = useRef(false)
   const fullscreenRootRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
+  const [isMobileInput, setIsMobileInput] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return undefined
+    }
+
+    const mediaQuery = window.matchMedia('(pointer: coarse), (max-width: 1023px)')
+    const syncInputMode = () => setIsMobileInput(mediaQuery.matches)
+    syncInputMode()
+    mediaQuery.addEventListener('change', syncInputMode)
+
+    return () => mediaQuery.removeEventListener('change', syncInputMode)
+  }, [])
   const runtimeViewBox = useMemo(() => {
+    if (isFullscreen && isMobileInput) {
+      return `${bounds.minX} ${bounds.minY} ${svgWidth} ${svgHeight}`
+    }
+
     const safeZoom = Math.max(1, isFullscreen ? fullscreenZoom : 1)
     const viewWidth = svgWidth / safeZoom
     const viewHeight = svgHeight / safeZoom
@@ -2119,7 +2136,7 @@ export function SimulationLayoutPreview({
     const centerY = bounds.minY + svgHeight / 2 - (isFullscreen ? fullscreenPan.y : 0)
 
     return `${centerX - viewWidth / 2} ${centerY - viewHeight / 2} ${viewWidth} ${viewHeight}`
-  }, [bounds.minX, bounds.minY, fullscreenPan.x, fullscreenPan.y, fullscreenZoom, isFullscreen, svgHeight, svgWidth])
+  }, [bounds.minX, bounds.minY, fullscreenPan.x, fullscreenPan.y, fullscreenZoom, isFullscreen, isMobileInput, svgHeight, svgWidth])
   const sortedNodes = useMemo(() => {
     const nodeIndex = new Map(layout.nodes.map((node, index) => [node.id, index]))
     return [...layout.nodes].sort((first, second) => {
@@ -2152,12 +2169,15 @@ export function SimulationLayoutPreview({
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
       setFullscreenPan({ x: 0, y: 0 })
+      if (isMobileInput) {
+        fullscreenRootRef.current?.scrollTo({ left: 0, top: 0 })
+      }
     })
 
     return () => window.cancelAnimationFrame(frameId)
-  }, [fullscreenViewResetSignal])
+  }, [fullscreenViewResetSignal, isMobileInput])
   const handleFullscreenPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (!isFullscreen || event.pointerType === 'mouse') {
+    if (!isFullscreen || isMobileInput || event.pointerType === 'mouse') {
       return
     }
 
@@ -2257,7 +2277,7 @@ export function SimulationLayoutPreview({
   }, [])
 
   const handleFullscreenWheel = useCallback((event: WheelEvent) => {
-    if (!isFullscreen) {
+    if (!isFullscreen || isMobileInput) {
       return
     }
 
@@ -2314,6 +2334,7 @@ export function SimulationLayoutPreview({
     getFullscreenViewportMetrics,
     getWheelDeltaPixels,
     isFullscreen,
+    isMobileInput,
     onFullscreenZoomChange,
     svgHeight,
     svgWidth,
@@ -2342,10 +2363,10 @@ export function SimulationLayoutPreview({
       onClick={onClearSelection}
       className={isFullscreen ? 'block' : 'block h-auto w-full min-w-0'}
       style={isFullscreen ? {
-        width: '100vw',
-        height: '100dvh',
-        maxWidth: '100vw',
-        maxHeight: '100dvh',
+        width: isMobileInput ? '100%' : '100vw',
+        height: isMobileInput ? '100%' : '100dvh',
+        maxWidth: isMobileInput ? 'none' : '100vw',
+        maxHeight: isMobileInput ? 'none' : '100dvh',
       } : { maxHeight: previewMaxHeight }}
     >
       <defs>
@@ -2396,10 +2417,17 @@ export function SimulationLayoutPreview({
   )
 
   if (isFullscreen) {
+    const mobileFullscreenCanvasScale = isMobileInput ? Math.max(1, fullscreenZoom) : 1
+
     return (
       <div
         ref={fullscreenRootRef}
-        className="fixed inset-0 z-[90] flex touch-none cursor-grab items-center justify-center overflow-hidden bg-slate-950 active:cursor-grabbing"
+        className={`fixed inset-0 z-[90] bg-slate-950 ${
+          isMobileInput
+            ? 'overflow-auto overscroll-contain'
+            : 'flex touch-none cursor-grab items-center justify-center overflow-hidden active:cursor-grabbing'
+        }`}
+        style={isMobileInput ? { touchAction: 'pan-x pan-y' } : undefined}
         onPointerDown={handleFullscreenPointerDown}
         onPointerMove={handleFullscreenPointerMove}
         onPointerUp={handleFullscreenPointerEnd}
@@ -2413,7 +2441,13 @@ export function SimulationLayoutPreview({
         }}
       >
         <div
-          className="will-change-transform"
+          className={isMobileInput ? 'h-full w-full' : 'will-change-transform'}
+          style={isMobileInput ? {
+            minWidth: '100%',
+            minHeight: '100%',
+            width: `${mobileFullscreenCanvasScale * 100}%`,
+            height: `${mobileFullscreenCanvasScale * 100}%`,
+          } : undefined}
         >
           {previewSvg}
         </div>

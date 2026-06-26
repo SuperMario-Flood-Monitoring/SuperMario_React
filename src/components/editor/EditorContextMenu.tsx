@@ -23,6 +23,7 @@ export function EditorContextMenu({
   onStartTeeCoordinateEdit,
   onOpenInfoPanel,
   onStartNodeMove,
+  onStartNodeResize,
   onAddLayoutNode,
   onDetachRelation,
   onAddNode,
@@ -37,6 +38,7 @@ export function EditorContextMenu({
   onStartTeeCoordinateEdit: () => void
   onOpenInfoPanel?: () => void
   onStartNodeMove?: () => void
+  onStartNodeResize?: () => void
   onAddLayoutNode: (kind: LayoutAddKind, source: NonNullable<ContextMenuState['layoutAdd']>) => void
   onDetachRelation: () => void
   onAddNode: (type: EditorNodeType, point: Point) => void
@@ -44,6 +46,7 @@ export function EditorContextMenu({
   onClose: () => void
 }) {
   const [mobileNodeMenuView, setMobileNodeMenuView] = useState<MobileNodeMenuView>('root')
+  const isCanvasAddMenu = !contextMenu.nodeId && !contextMenu.layoutAdd && !contextMenu.relationPort
   const isDark = theme === 'dark'
   const menuFrameClassName = isDark
     ? 'border-slate-800 bg-slate-950 text-slate-100'
@@ -144,6 +147,16 @@ export function EditorContextMenu({
           >
             객체이동
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              onStartNodeResize?.()
+              onClose()
+            }}
+            className={`block w-full px-5 py-3 text-left text-base font-black ${blueItemClassName}`}
+          >
+            크기 조절
+          </button>
         </>
       )}
     </>
@@ -224,7 +237,7 @@ export function EditorContextMenu({
   if (isMobileSheet) {
     return (
       <div
-        className="fixed inset-0 z-[230] flex items-end bg-slate-950/55"
+        className={`fixed inset-0 z-[230] flex items-end ${isCanvasAddMenu ? 'bg-transparent' : 'bg-slate-950/55'}`}
         onClick={onClose}
       >
         <div
