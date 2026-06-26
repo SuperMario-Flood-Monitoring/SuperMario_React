@@ -4159,6 +4159,44 @@ export const EditorCanvas = memo(function EditorCanvas({
     })
   }, [baseGroundBounds, baseGroundHeight, baseGroundWidth, clearLongPressTimer, nextNodeIndex, setLayout])
 
+  const selectBaseGroundAsTerrainNode = useCallback(() => {
+    clearLongPressTimer()
+    setIsEditorInfoPanelOpen(true)
+    setPendingPort(null)
+    setAttachTargetNodeId(null)
+    setCoordinateEditState(null)
+    setDragState(null)
+    setDragDraftPositionsByNodeId(null)
+    setResizeState(null)
+    setResizeDraftNodesById(null)
+    setMarqueeSelectionState(null)
+    setRelationPreviewNodeId(null)
+    mobileMoveArmedNodeIdRef.current = null
+    setMobileMoveArmedNodeId(null)
+    setMobileEditorMode('idle')
+    setContextMenu(null)
+
+    const materializedGroundId = `terrain_ground_${Date.now()}_${nextNodeIndex}`
+    const materializedGroundNode = normalizeNodePorts({
+      id: materializedGroundId,
+      swmmId: materializedGroundId,
+      name: `땅 ${nextNodeIndex}`,
+      type: 'terrain',
+      x: baseGroundBounds.left,
+      y: baseGroundBounds.top,
+      width: Math.max(MIN_TERRAIN_WIDTH, baseGroundWidth),
+      height: Math.max(MIN_TERRAIN_HEIGHT, baseGroundHeight),
+      ports: createEditorPorts('terrain', Math.max(MIN_TERRAIN_WIDTH, baseGroundWidth), Math.max(MIN_TERRAIN_HEIGHT, baseGroundHeight)),
+      props: { terrainKind: 'ground' },
+    })
+
+    setLayout((currentLayout) => ({
+      ...currentLayout,
+      nodes: [...currentLayout.nodes, materializedGroundNode],
+    }))
+    setSelection({ kind: 'node', id: materializedGroundId })
+  }, [baseGroundBounds, baseGroundHeight, baseGroundWidth, clearLongPressTimer, nextNodeIndex, setLayout])
+
   const isPointInsideBaseGround = useCallback((point: Point) => (
     point.x >= baseGroundBounds.left &&
     point.x <= baseGroundBounds.right &&
@@ -4177,6 +4215,12 @@ export const EditorCanvas = memo(function EditorCanvas({
     }
 
     const cursor = getSvgCursor(event.currentTarget, event.clientX, event.clientY)
+
+    if (!isMobileInput && isPointInsideBaseGround(cursor)) {
+      event.preventDefault()
+      selectBaseGroundAsTerrainNode()
+      return
+    }
 
     if (event.pointerType === 'touch' || event.pointerType === 'pen') {
       if (
@@ -4292,7 +4336,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     const point = svg ? getSvgCursor(svg, event.clientX, event.clientY) : { x: node.x, y: node.y }
 
     if (!isMobileInput && node.type === 'terrain') {
-      setSelection(null)
+      setSelection({ kind: 'node', id: node.id })
       setPendingPort(null)
       setAttachTargetNodeId(null)
       setContextMenu({
