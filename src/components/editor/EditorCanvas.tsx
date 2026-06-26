@@ -172,6 +172,7 @@ const EDITOR_ZOOM_STEP = 0.1
 const EDITOR_ZOOM_DEFAULT = 1
 const EDITOR_WHEEL_ZOOM_STEP = 0.12
 const EDITOR_WHEEL_LINE_HEIGHT_PX = 16
+const MOBILE_TAP_MAX_DISTANCE_PX = 10
 type MobileEditorInteractionMode = 'idle' | 'move' | 'resize'
 
 // ---------------------------------------------------------------------------
@@ -2834,6 +2835,15 @@ export function EditorCanvas({
     hasFixedYNode: boolean
     lastCursor: Point
   } | null>(null)
+  const mobileNodeTapCandidateRef = useRef<{
+    pointerId: number
+    node: EditorNode
+    point: Point
+    startClientX: number
+    startClientY: number
+    lastClientX: number
+    lastClientY: number
+  } | null>(null)
   const mobileMoveArmedNodeIdRef = useRef<string | null>(null)
   const suppressCoordinateEditFollowUpClickUntilRef = useRef(0)
   const nextNodeIndex = layout.nodes.length + 1
@@ -2902,6 +2912,7 @@ export function EditorCanvas({
     setResizeState(null)
     setResizeDraftNodesById(null)
     setMarqueeSelectionState(null)
+    mobileNodeTapCandidateRef.current = null
     mobileMoveArmedNodeIdRef.current = null
     setMobileMoveArmedNodeId(null)
     setMobileEditorMode('idle')
@@ -3793,6 +3804,7 @@ export function EditorCanvas({
 
     event.preventDefault()
     clearLongPressTimer()
+    mobileNodeTapCandidateRef.current = null
     mobilePinchZoomRef.current = {
       startDistance: pinchPair.distance,
       startZoom: editorZoom,
@@ -4168,6 +4180,25 @@ export function EditorCanvas({
     }
     latestCanvasPointerMoveRef.current = null
     cancelCanvasPointerMove()
+    const mobileTapCandidate = event?.type === 'pointerup' && (event.pointerType === 'touch' || event.pointerType === 'pen')
+      ? mobileNodeTapCandidateRef.current
+      : null
+    if (
+      mobileTapCandidate &&
+      mobileTapCandidate.pointerId === event?.pointerId &&
+      Math.hypot(
+        mobileTapCandidate.lastClientX - mobileTapCandidate.startClientX,
+        mobileTapCandidate.lastClientY - mobileTapCandidate.startClientY,
+      ) <= MOBILE_TAP_MAX_DISTANCE_PX
+    ) {
+      openMobileNodeActionMenu(
+        mobileTapCandidate.node,
+        mobileTapCandidate.point,
+        mobileTapCandidate.lastClientX,
+        mobileTapCandidate.lastClientY,
+      )
+    }
+    mobileNodeTapCandidateRef.current = null
     mobileNodeMoveRef.current = null
     mobilePinchZoomRef.current = null
     mobileTouchPointersRef.current.clear()
@@ -4229,6 +4260,7 @@ export function EditorCanvas({
     isScenarioReadOnly,
     layout,
     marqueeSelectionState,
+    openMobileNodeActionMenu,
     resizeDraftNodesById,
     resizeState,
     setLayout,
@@ -4255,6 +4287,22 @@ export function EditorCanvas({
         clientX: event.clientX,
         clientY: event.clientY,
       })
+      const tapCandidate = mobileNodeTapCandidateRef.current
+      if (tapCandidate?.pointerId === event.pointerId) {
+        const movedDistance = Math.hypot(
+          event.clientX - tapCandidate.startClientX,
+          event.clientY - tapCandidate.startClientY,
+        )
+        if (movedDistance > MOBILE_TAP_MAX_DISTANCE_PX) {
+          mobileNodeTapCandidateRef.current = null
+        } else {
+          mobileNodeTapCandidateRef.current = {
+            ...tapCandidate,
+            lastClientX: event.clientX,
+            lastClientY: event.clientY,
+          }
+        }
+      }
     }
 
     if ((event.pointerType === 'touch' || event.pointerType === 'pen') && mobilePinchZoomRef.current) {
@@ -4391,7 +4439,15 @@ export function EditorCanvas({
         : mobileMoveArmedNodeIdRef.current ?? mobileMoveArmedNodeId
 
       if (armedNodeId !== node.id) {
-        openMobileNodeActionMenu(node, cursor, event.clientX, event.clientY)
+        mobileNodeTapCandidateRef.current = {
+          pointerId: event.pointerId,
+          node,
+          point: cursor,
+          startClientX: event.clientX,
+          startClientY: event.clientY,
+          lastClientX: event.clientX,
+          lastClientY: event.clientY,
+        }
         return
       }
 
