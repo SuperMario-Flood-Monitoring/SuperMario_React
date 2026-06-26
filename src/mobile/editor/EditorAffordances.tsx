@@ -131,6 +131,102 @@ export function LayoutAddHandles({
   )
 }
 
+/** 모바일에서 hover 대신 항상 보이는 지형 추가 edge 버튼을 렌더링한다. */
+export function MobileLayoutAddEdgeButtons({
+  bounds,
+  onPointerDown,
+}: {
+  bounds: RectBounds
+  onPointerDown: (side: LayoutAddSide, event: ReactPointerEvent<SVGGElement>) => void
+}) {
+  const width = Math.max(0, bounds.right - bounds.left)
+  const height = Math.max(0, bounds.bottom - bounds.top)
+
+  if (width < 120 || height < 120) {
+    return null
+  }
+
+  const stripSize = Math.min(88, Math.max(56, Math.min(width, height) * 0.18))
+  const centerX = bounds.left + width / 2
+  const centerY = bounds.top + height / 2
+  const sideButtons: Array<{
+    side: LayoutAddSide
+    x: number
+    y: number
+    width: number
+    height: number
+    labelX: number
+    labelY: number
+    rotate?: number
+  }> = [
+    {
+      side: 'left',
+      x: bounds.left,
+      y: bounds.top,
+      width: stripSize,
+      height,
+      labelX: bounds.left + stripSize / 2,
+      labelY: centerY,
+      rotate: -90,
+    },
+    {
+      side: 'right',
+      x: bounds.right - stripSize,
+      y: bounds.top,
+      width: stripSize,
+      height,
+      labelX: bounds.right - stripSize / 2,
+      labelY: centerY,
+      rotate: 90,
+    },
+    {
+      side: 'bottom',
+      x: bounds.left,
+      y: bounds.bottom - stripSize,
+      width,
+      height: stripSize,
+      labelX: centerX,
+      labelY: bounds.bottom - stripSize / 2,
+    },
+  ]
+
+  return (
+    <g>
+      {sideButtons.map((button) => (
+        <g
+          key={button.side}
+          className="cursor-copy"
+          onPointerDown={(event) => onPointerDown(button.side, event)}
+        >
+          <rect
+            x={button.x}
+            y={button.y}
+            width={button.width}
+            height={button.height}
+            rx="14"
+            fill="rgba(15, 23, 42, 0.72)"
+            stroke="rgba(248, 250, 252, 0.92)"
+            strokeWidth="2.5"
+            pointerEvents="all"
+          />
+          <text
+            x={button.labelX}
+            y={button.labelY}
+            textAnchor="middle"
+            dominantBaseline="central"
+            transform={button.rotate ? `rotate(${button.rotate} ${button.labelX} ${button.labelY})` : undefined}
+            className="select-none text-[22px] font-black"
+            fill="white"
+            pointerEvents="none"
+          >
+            + 레이아웃
+          </text>
+        </g>
+      ))}
+    </g>
+  )
+}
+
 /** resize 가능한 edge의 보이지 않는 hit 영역과 hover 표시를 렌더링한다. */
 function ResizeHandleRect({
   node,

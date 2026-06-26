@@ -146,20 +146,18 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
         <div className="flex flex-1 flex-col px-5 pb-5">
           <div className="flex flex-1 flex-col justify-center pb-7 pt-3">
-            <div className="mx-auto flex h-32 w-32 items-center justify-center rounded-lg border border-white/10 bg-white/6 shadow-[0_28px_48px_rgba(0,0,0,0.22)]">
-              <img
-                src={logoImage}
-                alt="수퍼마리오 로고"
-                className="h-24 w-24 object-contain drop-shadow-[0_18px_32px_rgba(56,189,248,0.18)]"
-              />
-            </div>
+            <img
+              src={logoImage}
+              alt="수퍼마리오 로고"
+              className="mx-auto h-[115px] w-[115px] object-contain drop-shadow-[0_18px_32px_rgba(56,189,248,0.18)]"
+            />
             <div className="mt-7">
               <h1 className="text-[34px] font-black leading-[1.04] text-white">
                 도시침수
                 <span className="block text-sky-200">배수도 작업장</span>
               </h1>
               <div className="mt-5 grid grid-cols-3 gap-2">
-                {['SWMM', '1초 tick', '실시간'].map((label) => (
+                {['SWMM', '배수도 편집', '실시간 분석'].map((label) => (
                   <span
                     key={label}
                     className="rounded-md border border-white/10 bg-white/8 px-3 py-2 text-center text-[11px] font-black text-slate-100"

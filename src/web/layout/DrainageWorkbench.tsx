@@ -28,7 +28,7 @@ const VIEW_CONFIG: Record<
 > = {
   simulation: {
     label: '시뮬레이션',
-    description: '편집 모드의 저장된 설계를 SWMM 엔진으로 실행하고 1초 tick 결과를 확인하는 화면입니다.',
+    description: '편집 모드의 저장된 설계를 SWMM 엔진으로 실행하고 실시간 결과를 확인하는 화면입니다.',
   },
   editor: {
     label: '편집 모드',
@@ -42,6 +42,64 @@ function getSystemWorkbenchTheme(): WorkbenchTheme {
   }
 
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function NotificationChatModalFallback({ theme, onClose }: { theme: WorkbenchTheme; onClose: () => void }) {
+  const isDark = theme === 'dark'
+  const panelClass = isDark
+    ? 'border-slate-700 bg-slate-950 text-slate-100'
+    : 'border-slate-200 bg-white text-slate-950'
+  const mutedTextClass = isDark ? 'text-slate-400' : 'text-slate-500'
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="notification-chat-modal-fallback-title"
+      onMouseDown={onClose}
+    >
+      <section
+        className={`flex max-h-[86vh] w-full max-w-[720px] flex-col rounded-lg border shadow-2xl ${panelClass}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className={`flex items-start justify-between gap-4 border-b p-5 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          <div>
+            <h2 id="notification-chat-modal-fallback-title" className="text-lg font-black">알림 채팅방</h2>
+            <p className={`mt-1 text-sm font-semibold ${mutedTextClass}`}>채팅방 목록 확인 중</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className={`rounded-md border px-3 py-2 text-xs font-black transition ${isDark ? 'border-slate-700 bg-slate-900 hover:bg-slate-800' : 'border-slate-300 bg-white hover:bg-slate-100'}`}
+          >
+            닫기
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={index}
+              className={`animate-pulse rounded-lg border p-4 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}
+            >
+              <div className={`h-4 w-28 rounded ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
+              <div className={`mt-3 h-3 w-48 rounded ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+              <div className={`mt-3 h-3 w-36 rounded ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+            </div>
+          ))}
+        </div>
+        <footer className={`flex justify-end border-t p-5 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          <button
+            type="button"
+            disabled
+            className="rounded-md border border-emerald-500 bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-700 opacity-50"
+          >
+            추가
+          </button>
+        </footer>
+      </section>
+    </div>
+  )
 }
 
 export function DrainageWorkbench({ mode, onModeChange, onLogout }: DrainageWorkbenchProps) {
@@ -200,7 +258,7 @@ export function DrainageWorkbench({ mode, onModeChange, onLogout }: DrainageWork
         <SimulationWorkbench theme={theme} renderHeader={renderWorkbenchHeader} />
       )}
       {isNotificationModalOpen ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<NotificationChatModalFallback theme={theme} onClose={() => setIsNotificationModalOpen(false)} />}>
           <NotificationChatModal
             theme={theme}
             onClose={() => setIsNotificationModalOpen(false)}

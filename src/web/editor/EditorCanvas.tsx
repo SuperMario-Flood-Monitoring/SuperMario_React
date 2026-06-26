@@ -4,6 +4,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type WheelEvent as ReactWheelEvent,
   memo,
   useCallback,
   useEffect,
@@ -143,8 +144,9 @@ import {
 } from '../../services/swmm/client'
 import { InfoPanelFrame } from '../layout/InfoPanelLayout'
 import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchTheme'
-import { CloseIcon, GearIcon } from '../ui/WebIcons'
+import { CloseIcon, GearIcon, RedoIcon, UndoIcon } from '../ui/WebIcons'
 import { WebPortal } from '../ui/WebPortal'
+import { WebZoomControls } from '../ui/WebZoomControls'
 import {
   type EditorEndpoint,
   type EditorLayout,
@@ -188,6 +190,45 @@ const MOBILE_MOVE_STEP = 40
 const MOBILE_ADD_PREVIEW_OFFSET_Y_PX = 32
 type MobileEditorInteractionMode = 'idle' | 'move' | 'resize'
 type RelationPreviewMode = 'parent' | 'child'
+
+function formatZoomPercentLabel(zoom: number, defaultZoom = 1) {
+  return `${Math.round((zoom / defaultZoom) * 100)}%`
+}
+
+function forwardBackgroundWheelToElementBelow(event: ReactWheelEvent<HTMLElement>) {
+  if (event.target !== event.currentTarget) {
+    return
+  }
+
+  const overlay = event.currentTarget
+  const previousPointerEvents = overlay.style.pointerEvents
+  overlay.style.pointerEvents = 'none'
+  const target = document.elementFromPoint(event.clientX, event.clientY)
+  overlay.style.pointerEvents = previousPointerEvents
+
+  if (!target || target === overlay || overlay.contains(target)) {
+    return
+  }
+
+  event.preventDefault()
+  const nativeEvent = event.nativeEvent
+  target.dispatchEvent(new WheelEvent('wheel', {
+    bubbles: true,
+    cancelable: true,
+    deltaX: nativeEvent.deltaX,
+    deltaY: nativeEvent.deltaY,
+    deltaZ: nativeEvent.deltaZ,
+    deltaMode: nativeEvent.deltaMode,
+    clientX: nativeEvent.clientX,
+    clientY: nativeEvent.clientY,
+    screenX: nativeEvent.screenX,
+    screenY: nativeEvent.screenY,
+    ctrlKey: nativeEvent.ctrlKey,
+    metaKey: nativeEvent.metaKey,
+    shiftKey: nativeEvent.shiftKey,
+    altKey: nativeEvent.altKey,
+  }))
+}
 
 // ---------------------------------------------------------------------------
 // relation 포트/attach 좌표 계산 helper
@@ -2948,6 +2989,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const editorCanvasViewportRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
+  const dismissedEditorInfoNodeIdRef = useRef<string | null>(null)
   const longPressTimerRef = useRef<number | null>(null)
   const mobileNodeMoveRef = useRef<{
     pointerId: number
@@ -4837,7 +4879,11 @@ export const EditorCanvas = memo(function EditorCanvas({
       if (!svg.hasPointerCapture(event.pointerId)) {
         svg.setPointerCapture(event.pointerId)
       }
-      setIsEditorInfoPanelOpen(true)
+      const shouldKeepEditorInfoClosed = !isEditorInfoPanelOpen && dismissedEditorInfoNodeIdRef.current === node.id
+      if (!shouldKeepEditorInfoClosed) {
+        dismissedEditorInfoNodeIdRef.current = null
+        setIsEditorInfoPanelOpen(true)
+      }
     }
 
     if (coordinateEditState) {
@@ -5284,10 +5330,6 @@ export const EditorCanvas = memo(function EditorCanvas({
   }, [canvasHeight, canvasWidth, editorPan.x, editorPan.y, editorZoom])
   const mobileScrollViewBox = `0 0 ${canvasWidth} ${canvasHeight}`
 
-  const updateEditorZoom = (delta: number) => {
-    setEditorZoom((current) => Math.max(EDITOR_ZOOM_MIN, current + delta))
-  }
-
   const getEditorViewportMetrics = useCallback((zoom: number, pan = editorPan) => {
     const safeZoom = Math.max(EDITOR_ZOOM_MIN, zoom)
     const viewWidth = canvasWidth / safeZoom
@@ -5448,23 +5490,12 @@ export const EditorCanvas = memo(function EditorCanvas({
     <EditorActionToolbar
       isDark={isDark}
       controlBarClassName={themeTokens.controlBar}
-      panelMutedClassName={themeTokens.panelMuted}
-      buttonClassName={themeTokens.button}
-      buttonMutedClassName={themeTokens.buttonMuted}
-      editorZoom={editorZoom}
-      zoomStep={EDITOR_ZOOM_STEP}
-      canUndo={canUndo}
-      canRedo={canRedo}
       isScenarioReadOnly={isScenarioReadOnly}
       isScenarioEditMode={isScenarioEditMode}
       isExportingInp={isExportingInp}
       isExportingPng={isExportingPng}
       swmmEngineUrl={SWMM_ENGINE_URL}
       fileInputRef={fileInputRef}
-      onZoomChange={updateEditorZoom}
-      onZoomReset={() => setEditorZoom(EDITOR_ZOOM_DEFAULT)}
-      onUndo={undoEditorLayout}
-      onRedo={redoEditorLayout}
       onExportJson={() => downloadLayout(layout)}
       onExportInp={handleExportSwmmInp}
       onExportPng={handleExportEditorPng}
@@ -5499,11 +5530,17 @@ export const EditorCanvas = memo(function EditorCanvas({
   )
   const editorSettingsSheet = isEditorSettingsOpen ? (
     <div
-      className={`fixed z-[220] flex bg-slate-950/55 ${
+      className={`fixed z-[220] flex ${
         isMobileInput
-          ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end'
+          ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end bg-slate-950/55'
           : 'inset-0 items-stretch justify-end'
       }`}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          setIsEditorSettingsOpen(false)
+        }
+      }}
+      onWheel={isMobileInput ? undefined : forwardBackgroundWheelToElementBelow}
     >
       <section
         ref={isMobileInput ? mobileEditorSettingsSheetRef : undefined}
@@ -6024,45 +6061,55 @@ export const EditorCanvas = memo(function EditorCanvas({
     </div>
   ) : null
   const editorZoomRatio = editorZoom / EDITOR_ZOOM_DEFAULT
+  const editorZoomPercentLabel = formatZoomPercentLabel(editorZoom, EDITOR_ZOOM_DEFAULT)
   const mobileCanvasScale = isMobileInput ? Math.max(1, editorZoomRatio) : 1
   const renderedEditorViewBox = isMobileInput ? mobileScrollViewBox : editorViewBox
   const mobileEditorLocksScroll = false
-  const editorZoomControls = (
-    <div className="fixed right-4 top-24 z-[130] inline-flex overflow-hidden rounded-md border border-white/15 bg-slate-950/88 text-white shadow-xl backdrop-blur lg:top-28">
-      {editorZoomRatio > 1.001 ? (
-        <button
-          type="button"
-          onClick={() => setEditorZoom((current) => Math.max(EDITOR_ZOOM_DEFAULT, current - EDITOR_ZOOM_STEP))}
-          aria-label="편집 캔버스 축소"
-          title="축소"
-          className="flex h-11 w-12 items-center justify-center border-r border-white/10 text-xl font-black leading-none transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300"
-        >
-          -
-        </button>
-      ) : null}
+  const editorUndoRedoButtonClassName = isDark
+    ? 'border-white/15 bg-slate-950/88 text-white hover:bg-slate-900 disabled:text-slate-500 disabled:opacity-35'
+    : 'border-slate-200 bg-white/92 text-slate-800 hover:bg-white disabled:text-slate-400 disabled:opacity-45'
+  const editorUndoRedoControls = (
+    <div className="fixed left-4 top-24 z-[130] inline-flex h-12 overflow-hidden rounded-md border border-white/15 bg-slate-950/88 shadow-xl backdrop-blur lg:top-28">
       <button
         type="button"
-        onClick={() => {
-          setEditorZoom(EDITOR_ZOOM_DEFAULT)
-          setEditorPan({ x: 0, y: 0 })
-        }}
-        aria-label="편집 캔버스 확대 초기화"
-        title="확대 초기화"
-        disabled={editorZoomRatio <= 1.001}
-        className="flex h-11 w-12 items-center justify-center border-r border-white/10 text-sm font-black leading-none transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300 disabled:cursor-not-allowed disabled:text-slate-500 disabled:opacity-70"
+        onClick={undoEditorLayout}
+        disabled={!canUndo || isScenarioReadOnly}
+        aria-label="되돌리기"
+        title="되돌리기"
+        className={`flex h-12 w-12 items-center justify-center border-r transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300 disabled:cursor-not-allowed ${
+          isDark ? 'border-white/10' : 'border-slate-200'
+        } ${editorUndoRedoButtonClassName}`}
       >
-        1x
+        <UndoIcon className="h-5 w-5" />
       </button>
       <button
         type="button"
-        onClick={() => setEditorZoom((current) => current + EDITOR_ZOOM_STEP)}
-        aria-label="편집 캔버스 확대"
-        title="확대"
-        className="flex h-11 w-12 items-center justify-center text-xl font-black leading-none transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300"
+        onClick={redoEditorLayout}
+        disabled={!canRedo || isScenarioReadOnly}
+        aria-label="다시 실행"
+        title="다시 실행"
+        className={`flex h-12 w-12 items-center justify-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300 disabled:cursor-not-allowed ${editorUndoRedoButtonClassName}`}
       >
-        +
+        <RedoIcon className="h-5 w-5" />
       </button>
     </div>
+  )
+  const editorZoomControls = (
+    <WebZoomControls
+      className="fixed right-4 top-24 z-[130] lg:top-28"
+      percentLabel={editorZoomPercentLabel}
+      canZoomOut={editorZoomRatio > 1.001}
+      canReset={editorZoomRatio > 1.001}
+      zoomOutLabel="편집 캔버스 축소"
+      resetLabel="편집 캔버스 확대 초기화"
+      zoomInLabel="편집 캔버스 확대"
+      onZoomOut={() => setEditorZoom((current) => Math.max(EDITOR_ZOOM_DEFAULT, current - EDITOR_ZOOM_STEP))}
+      onReset={() => {
+        setEditorZoom(EDITOR_ZOOM_DEFAULT)
+        setEditorPan({ x: 0, y: 0 })
+      }}
+      onZoomIn={() => setEditorZoom((current) => current + EDITOR_ZOOM_STEP)}
+    />
   )
   const floatingButtonVisualViewportStyle: CSSProperties | undefined = isMobileInput
     ? { bottom: 'calc(var(--app-visual-bottom-inset, 0px) + env(safe-area-inset-bottom) + 20px)' }
@@ -6071,29 +6118,38 @@ export const EditorCanvas = memo(function EditorCanvas({
     ? 'border-white bg-white text-slate-950 hover:bg-slate-100 focus-visible:ring-white'
     : 'border-slate-950 bg-slate-950 text-white hover:bg-slate-900 focus-visible:ring-slate-500'
   const floatingBlueButtonClassName = 'border-blue-300 bg-blue-600 text-white hover:bg-blue-500 focus-visible:ring-blue-300'
+  const webFloatingButtonSizeClassName = 'h-[58px] w-[58px]'
   const desktopEditorSettingsFab = !isMobileInput && !isEditorSettingsOpen ? (
     <button
       type="button"
       onClick={() => setIsEditorSettingsOpen(true)}
       aria-label="편집 세팅"
       title="편집 세팅"
-      className={`fixed bottom-5 right-8 z-[140] flex h-12 w-12 items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${floatingSystemButtonClassName}`}
+      className={`fixed bottom-5 right-8 z-[140] flex ${webFloatingButtonSizeClassName} items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${floatingSystemButtonClassName}`}
     >
-      <GearIcon />
+      <GearIcon className="h-6 w-6" />
     </button>
   ) : null
   const desktopEditorInfoDrawer = !isMobileInput ? (
     <div
-      className={`fixed inset-0 z-[220] flex items-stretch justify-start bg-slate-950/45 transition-[opacity] duration-200 ${
+      className={`fixed inset-0 z-[220] flex items-stretch justify-start transition-[opacity] duration-200 ${
         isEditorInfoPanelOpen
           ? 'opacity-100'
           : 'pointer-events-none opacity-0'
       }`}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          dismissedEditorInfoNodeIdRef.current = selection?.kind === 'node' ? selection.id : null
+          setIsEditorInfoPanelOpen(false)
+        }
+      }}
+      onWheel={forwardBackgroundWheelToElementBelow}
     >
       <div
         className={`transition-transform duration-200 ${
           isEditorInfoPanelOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
+        onClick={(event) => event.stopPropagation()}
       >
         <InfoPanelFrame
           theme={theme}
@@ -6176,6 +6232,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       ) : null}
       <div className="flex min-h-0 min-w-0 flex-1 items-stretch">
         <WebPortal>
+          {editorUndoRedoControls}
           {editorZoomControls}
           {desktopEditorSettingsFab}
           {desktopEditorInfoDrawer}

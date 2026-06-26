@@ -88,9 +88,17 @@ export function EditorContextMenu({
   const mobileAddButtonClassName = isDark
     ? 'border-white/10 bg-slate-950/85 active:bg-slate-900'
     : 'border-slate-200 bg-slate-50 active:bg-white'
+  const mobileLayoutAddButtonClassName = isDark
+    ? 'border-slate-700 bg-slate-950 text-slate-200 active:bg-slate-900'
+    : 'border-slate-200 bg-slate-50 text-slate-700 active:bg-white'
   const mobileSheetTitle = contextMenu.baseGround || contextMenu.nodeId
     ? '객체 액션'
+    : contextMenu.layoutAdd
+      ? '레이아웃 추가'
     : '편집 메뉴'
+  const mobileSheetDescription = contextMenu.layoutAdd
+    ? '선택한 면에 이어 붙일 레이아웃을 선택하세요.'
+    : undefined
 
   useEffect(() => {
     if (!isMobileSheet || !isCanvasAddMenu || !onMobileSheetHeightChange) {
@@ -252,6 +260,24 @@ export function EditorContextMenu({
     </>
   )
 
+  const renderMobileLayoutAddMenu = () => (
+    <div className="px-5 py-4">
+      <div className={`text-xs font-black ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>레이아웃 종류</div>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        {LAYOUT_ADD_KIND_OPTIONS.map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            onClick={() => onAddLayoutNode(kind, contextMenu.layoutAdd!)}
+            className={`min-h-11 rounded-lg border px-3 py-2 text-sm font-black leading-tight transition ${mobileLayoutAddButtonClassName}`}
+          >
+            {LAYOUT_ADD_KIND_LABELS[kind]} 추가
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
   const menuBodyContent = (
     <>
       {contextMenu.nodeId ? (
@@ -404,6 +430,7 @@ export function EditorContextMenu({
       <MobileBottomSheet
         theme={theme}
         title={mobileSheetTitle}
+        description={mobileSheetDescription}
         closeLabel="바텀시트 닫기"
         zIndexClassName="z-[230]"
         overlayClassName="fixed inset-x-0 bottom-0 flex items-end"
@@ -417,7 +444,13 @@ export function EditorContextMenu({
         onClose={onClose}
         onContextMenu={(event) => event.preventDefault()}
       >
-        {contextMenu.baseGround ? renderMobileBaseGroundMenu() : contextMenu.nodeId ? renderMobileNodeMenu() : menuBodyContent}
+        {contextMenu.baseGround
+          ? renderMobileBaseGroundMenu()
+          : contextMenu.nodeId
+            ? renderMobileNodeMenu()
+            : contextMenu.layoutAdd
+              ? renderMobileLayoutAddMenu()
+              : menuBodyContent}
       </MobileBottomSheet>
     )
   }

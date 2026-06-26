@@ -68,7 +68,7 @@ import { useLayoutIndexes } from '../diagram/useLayoutIndexes'
 import { useRafCoalescedCallback } from '../diagram/useRafCoalescedCallback'
 import { downloadSvgAsPng } from '../simulation/pngExport'
 import { EditorActionToolbar } from './EditorActionToolbar'
-import { LayoutAddHandles, PipeResizeHandles } from './EditorAffordances'
+import { LayoutAddHandles, MobileLayoutAddEdgeButtons, PipeResizeHandles } from './EditorAffordances'
 import { EditorContextMenu } from './EditorContextMenu'
 import { EditableNode } from './EditableNode'
 import { EditorScenarioToolbar } from './EditorScenarioToolbar'
@@ -5670,10 +5670,12 @@ export const EditorCanvas = memo(function EditorCanvas({
         const offsetY = (svgRect.height - renderedHeight) / 2
         const targetClientX = svgRect.left + offsetX + center.x * viewportScale
         const targetClientY = svgRect.top + offsetY + center.y * viewportScale
+        const visibleViewportHeight = Math.max(1, viewport.clientHeight - mobileModalSheetHeight)
+        const targetViewportY = viewportRect.top + visibleViewportHeight / 2
 
         viewport.scrollTo({
           left: Math.max(0, viewport.scrollLeft + targetClientX - viewportRect.left - viewport.clientWidth / 2),
-          top: Math.max(0, viewport.scrollTop + targetClientY - viewportRect.top - viewport.clientHeight / 2),
+          top: Math.max(0, viewport.scrollTop + targetClientY - targetViewportY),
           behavior: 'smooth',
         })
         return
@@ -5684,7 +5686,7 @@ export const EditorCanvas = memo(function EditorCanvas({
         y: canvasHeight / 2 - center.y,
       })
     })
-  }, [canvasHeight, canvasWidth, isMobileInput])
+  }, [canvasHeight, canvasWidth, isMobileInput, mobileModalSheetHeight])
 
   const getEditorWheelDeltaPixels = useCallback((event: WheelEvent) => {
     if (event.deltaMode === window.WheelEvent.DOM_DELTA_LINE) {
@@ -6784,7 +6786,31 @@ export const EditorCanvas = memo(function EditorCanvas({
               onPortContextMenu={handlePortContextMenu}
               onResizePointerDown={handlePipeResizePointerDown}
             />
-            {!isMobileInput ? (
+            {isMobileInput ? (
+              <g>
+                {terrainNodes.map((node) => {
+                  const renderNode = renderNodesById.get(node.id) ?? node
+
+                  return (
+                    <g key={`${node.id}-mobile-layout-add-buttons`}>
+                      <MobileLayoutAddEdgeButtons
+                        bounds={{
+                          left: renderNode.x,
+                          top: renderNode.y,
+                          right: renderNode.x + renderNode.width,
+                          bottom: renderNode.y + renderNode.height,
+                        }}
+                        onPointerDown={(side, event) => handleNodeLayoutAddPointerDown(renderNode, side, event)}
+                      />
+                    </g>
+                  )
+                })}
+                <MobileLayoutAddEdgeButtons
+                  bounds={baseGroundBounds}
+                  onPointerDown={handleBaseLayoutAddPointerDown}
+                />
+              </g>
+            ) : (
               <g>
                 {terrainNodes.map((node) => {
                   const renderNode = renderNodesById.get(node.id) ?? node
@@ -6803,7 +6829,7 @@ export const EditorCanvas = memo(function EditorCanvas({
                   onPointerDown={handleBaseLayoutAddPointerDown}
                 />
               </g>
-            ) : null}
+            )}
 
             <g>
               {layout.links.map((link) => (

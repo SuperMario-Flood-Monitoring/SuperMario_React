@@ -1,4 +1,15 @@
-import { type CSSProperties, type ChangeEvent, type ReactNode, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type CSSProperties,
+  type ChangeEvent,
+  type ReactNode,
+  type WheelEvent as ReactWheelEvent,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { createDefaultEditorLayout } from '../editor/defaultLayout'
 import { PIPE_KIND_LABELS, SWMM_ENGINE_URL } from '../editor/editorDefinitions'
 import { normalizeRelationAttachments } from '../editor/editorRelations'
@@ -36,6 +47,7 @@ import { downloadSvgAsPng } from './pngExport'
 import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchTheme'
 import { GearIcon } from '../ui/WebIcons'
 import { WebPortal } from '../ui/WebPortal'
+import { WebZoomControls } from '../ui/WebZoomControls'
 
 interface RuntimeReport {
   ok: boolean
@@ -73,6 +85,41 @@ const RAINFALL_PRESET_OPTIONS = [
 ] as const
 const FULLSCREEN_ZOOM_MIN = 1
 const FULLSCREEN_ZOOM_STEP = 0.25
+
+function forwardBackgroundWheelToElementBelow(event: ReactWheelEvent<HTMLElement>) {
+  if (event.target !== event.currentTarget) {
+    return
+  }
+
+  const overlay = event.currentTarget
+  const previousPointerEvents = overlay.style.pointerEvents
+  overlay.style.pointerEvents = 'none'
+  const target = document.elementFromPoint(event.clientX, event.clientY)
+  overlay.style.pointerEvents = previousPointerEvents
+
+  if (!target || target === overlay || overlay.contains(target)) {
+    return
+  }
+
+  event.preventDefault()
+  const nativeEvent = event.nativeEvent
+  target.dispatchEvent(new WheelEvent('wheel', {
+    bubbles: true,
+    cancelable: true,
+    deltaX: nativeEvent.deltaX,
+    deltaY: nativeEvent.deltaY,
+    deltaZ: nativeEvent.deltaZ,
+    deltaMode: nativeEvent.deltaMode,
+    clientX: nativeEvent.clientX,
+    clientY: nativeEvent.clientY,
+    screenX: nativeEvent.screenX,
+    screenY: nativeEvent.screenY,
+    ctrlKey: nativeEvent.ctrlKey,
+    metaKey: nativeEvent.metaKey,
+    shiftKey: nativeEvent.shiftKey,
+    altKey: nativeEvent.altKey,
+  }))
+}
 
 const NODE_TYPE_LABELS: Record<string, string> = {
   apartment: '아파트',
@@ -403,6 +450,8 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   const autoApplyTimerRef = useRef<number | null>(null)
   const layoutFileInputRef = useRef<HTMLInputElement | null>(null)
   const previewSelectionClearedRef = useRef(false)
+  const dismissedRuntimeInfoNodeIdRef = useRef<string | null>(null)
+  const suppressedRuntimeInfoBlockageIdRef = useRef<string | null>(null)
   const runtimeSheetDragStartYRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -456,24 +505,46 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     setIsFullscreen((current) => !current)
   }, [isFullscreen, landscapeModeSupport, requestLandscape])
   const handleSelectPreviewNode = useCallback((nodeId: string, targetSwmmId?: string) => {
+    const shouldKeepRuntimeInfoClosed = !isInfoPanelOpen && dismissedRuntimeInfoNodeIdRef.current === nodeId
     previewSelectionClearedRef.current = !targetSwmmId
     setSelectedPreviewNodeId(nodeId)
     if (!targetSwmmId) {
       setSelectedBlockageId('')
     }
+    if (shouldKeepRuntimeInfoClosed) {
+      suppressedRuntimeInfoBlockageIdRef.current = targetSwmmId ?? null
+      return
+    }
+
+    dismissedRuntimeInfoNodeIdRef.current = null
+    suppressedRuntimeInfoBlockageIdRef.current = null
     setIsInfoPanelOpen(true)
-  }, [])
+  }, [isInfoPanelOpen])
   const handleSelectBlockageTarget = useCallback((swmmLinkId: string) => {
     previewSelectionClearedRef.current = false
     setSelectedBlockageId(swmmLinkId)
+    if (suppressedRuntimeInfoBlockageIdRef.current === swmmLinkId) {
+      suppressedRuntimeInfoBlockageIdRef.current = null
+      return
+    }
+
+    dismissedRuntimeInfoNodeIdRef.current = null
+    suppressedRuntimeInfoBlockageIdRef.current = null
     setIsInfoPanelOpen(true)
   }, [])
   const handleClearPreviewSelection = useCallback(() => {
     previewSelectionClearedRef.current = true
+    dismissedRuntimeInfoNodeIdRef.current = null
+    suppressedRuntimeInfoBlockageIdRef.current = null
     setSelectedPreviewNodeId('')
     setSelectedBlockageId('')
     setIsInfoPanelOpen(false)
   }, [])
+  const dismissRuntimeInfoFromBackdrop = useCallback(() => {
+    dismissedRuntimeInfoNodeIdRef.current = selectedPreviewNodeId || null
+    suppressedRuntimeInfoBlockageIdRef.current = null
+    setIsInfoPanelOpen(false)
+  }, [selectedPreviewNodeId])
   const selectedPreviewTarget = selectedPreviewNode
     ? blockageTargets.find((target) => target.sourceEditorId === selectedPreviewNode.id) ?? null
     : null
@@ -1067,19 +1138,26 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   ) : null
   const scenarioSettingsSheet = isScenarioSettingsOpen ? (
     <div
-      className={`fixed z-[220] flex bg-slate-950/45 ${
+      className={`fixed z-[220] flex ${
         isMobileInput
-          ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end justify-center'
+          ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end justify-center bg-slate-950/45'
           : 'inset-0 items-stretch justify-end'
       }`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="scenario-settings-title"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          setIsScenarioSettingsOpen(false)
+        }
+      }}
+      onWheel={isMobileInput ? undefined : forwardBackgroundWheelToElementBelow}
     >
       <section
         className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-16px)] w-screen rounded-t-2xl border-x-0 border-b-0 border-t' : 'h-screen w-[420px] max-w-[92vw] border-l'} overflow-hidden shadow-2xl ${
           isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-950'
         }`}
+        onClick={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className={`flex items-center justify-between gap-3 border-b px-5 py-4 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
@@ -1214,14 +1292,20 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   ) : null
   const runtimeInfoSheet = shouldRenderRuntimeInfo ? (
     <div
-      className={`fixed z-[220] flex bg-slate-950/45 ${
+      className={`fixed z-[220] flex ${
         isMobileInput
-          ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end justify-center'
+          ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end justify-center bg-slate-950/45'
           : 'inset-0 items-stretch justify-start'
       }`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="runtime-info-sheet-title"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          dismissRuntimeInfoFromBackdrop()
+        }
+      }}
+      onWheel={isMobileInput ? undefined : forwardBackgroundWheelToElementBelow}
     >
       <section
         className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-16px)] w-screen rounded-t-2xl border-x-0 border-b-0 border-t' : 'h-screen w-[430px] max-w-[92vw] border-r'} overflow-hidden shadow-2xl ${
@@ -1315,20 +1399,23 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   const floatingSystemButtonClassName = isDark
     ? 'border-white bg-white text-slate-950 hover:bg-slate-100 focus-visible:ring-white'
     : 'border-slate-950 bg-slate-950 text-white hover:bg-slate-900 focus-visible:ring-slate-500'
+  const floatingButtonSizeClassName = isMobileInput ? 'h-12 w-12' : 'h-[58px] w-[58px]'
+  const floatingButtonIconClassName = isMobileInput ? 'h-4 w-4' : 'h-6 w-6'
   const scenarioSettingsFab = !isScenarioSettingsOpen && !isFullscreen ? (
     <button
       type="button"
       onClick={() => setIsScenarioSettingsOpen(true)}
       aria-label="시나리오세팅"
       title="시나리오세팅"
-      className={`fixed bottom-5 right-8 z-[120] flex h-12 w-12 items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${floatingSystemButtonClassName}`}
+      className={`fixed bottom-5 right-8 z-[120] flex ${floatingButtonSizeClassName} items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${floatingSystemButtonClassName}`}
       style={floatingButtonVisualViewportStyle}
     >
-      <GearIcon className="h-4 w-4" />
+      <GearIcon className={floatingButtonIconClassName} />
     </button>
   ) : null
-  const fullscreenMenuButtonClassName = 'flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-slate-950/88 text-white shadow-xl backdrop-blur transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:cursor-wait disabled:opacity-55'
-  const fullscreenSettingsButtonClassName = `flex h-12 w-12 items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 disabled:cursor-wait disabled:opacity-55 ${floatingSystemButtonClassName}`
+  const fullscreenFloatingIconScaleClassName = isMobileInput ? '' : '[&>svg]:h-6 [&>svg]:w-6'
+  const fullscreenMenuButtonClassName = `flex ${floatingButtonSizeClassName} items-center justify-center rounded-full border border-white/20 bg-slate-950/88 text-white shadow-xl backdrop-blur transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:cursor-wait disabled:opacity-55 ${fullscreenFloatingIconScaleClassName}`
+  const fullscreenSettingsButtonClassName = `flex ${floatingButtonSizeClassName} items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 disabled:cursor-wait disabled:opacity-55 ${floatingSystemButtonClassName}`
   const fullscreenTopButtonBaseClassName = 'flex h-11 w-11 items-center justify-center rounded-md border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:cursor-wait disabled:opacity-55'
   const fullscreenPlayButtonClassName = `${fullscreenTopButtonBaseClassName} border-emerald-300/60 bg-emerald-600/95 text-white hover:bg-emerald-500`
   const fullscreenPauseButtonClassName = `${fullscreenTopButtonBaseClassName} border-amber-300/60 bg-amber-500/95 text-slate-950 hover:bg-amber-400`
@@ -1373,42 +1460,20 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
       )}
     </div>
   ) : null
+  const isFullscreenZoomMin = fullscreenZoom <= FULLSCREEN_ZOOM_MIN + 0.001
   const fullscreenZoomControls = isFullscreen ? (
-    <div className="fixed right-4 top-4 z-[150] inline-flex overflow-hidden rounded-md border border-white/15 bg-slate-950/88 text-white shadow-xl backdrop-blur">
-      {fullscreenZoom > FULLSCREEN_ZOOM_MIN ? (
-        <button
-          type="button"
-          onClick={() => setFullscreenZoom((current) => Math.max(FULLSCREEN_ZOOM_MIN, current - FULLSCREEN_ZOOM_STEP))}
-          aria-label="축소"
-          title="축소"
-          className="flex h-11 w-12 items-center justify-center border-r border-white/10 text-xl font-black leading-none transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300"
-        >
-          -
-        </button>
-      ) : null}
-      <button
-        type="button"
-        onClick={() => {
-          setFullscreenZoom(FULLSCREEN_ZOOM_MIN)
-          setFullscreenViewResetSignal((current) => current + 1)
-        }}
-        aria-label="확대 초기화"
-        title="확대 초기화"
-        disabled={fullscreenZoom === FULLSCREEN_ZOOM_MIN}
-        className="flex h-11 w-12 items-center justify-center border-r border-white/10 text-sm font-black leading-none transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-45"
-      >
-        1x
-      </button>
-      <button
-        type="button"
-        onClick={() => setFullscreenZoom((current) => current + FULLSCREEN_ZOOM_STEP)}
-        aria-label="확대"
-        title="확대"
-        className="flex h-11 w-12 items-center justify-center text-xl font-black leading-none transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300"
-      >
-        +
-      </button>
-    </div>
+    <WebZoomControls
+      className="fixed right-4 top-4 z-[150]"
+      percentLabel={`${Math.round(fullscreenZoom * 100)}%`}
+      canZoomOut={!isFullscreenZoomMin}
+      canReset={!isFullscreenZoomMin}
+      onZoomOut={() => setFullscreenZoom((current) => Math.max(FULLSCREEN_ZOOM_MIN, current - FULLSCREEN_ZOOM_STEP))}
+      onReset={() => {
+        setFullscreenZoom(FULLSCREEN_ZOOM_MIN)
+        setFullscreenViewResetSignal((current) => current + 1)
+      }}
+      onZoomIn={() => setFullscreenZoom((current) => current + FULLSCREEN_ZOOM_STEP)}
+    />
   ) : null
   const fullscreenActionMenu = isFullscreen ? (
     <div className="fixed bottom-5 right-8 z-[150] flex flex-col items-end gap-2" style={floatingButtonVisualViewportStyle}>
@@ -1419,7 +1484,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
         title="시나리오세팅"
         className={fullscreenSettingsButtonClassName}
       >
-        <GearIcon className="h-4 w-4" />
+        <GearIcon className={floatingButtonIconClassName} />
       </button>
       <button
         type="button"

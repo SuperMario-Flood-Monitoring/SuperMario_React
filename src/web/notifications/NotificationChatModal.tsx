@@ -12,20 +12,21 @@ interface NotificationChatModalProps {
   onClose: () => void
 }
 
-function formatDate(value?: string) {
-  if (!value) {
-    return '-'
-  }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return '-'
-  }
-
-  return date.toLocaleString('ko-KR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  })
+function NotificationChatSkeletonList({ isDark }: { isDark: boolean }) {
+  return (
+    <div className="space-y-3" aria-label="알림 채팅방 목록 로딩 중">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          key={index}
+          className={`animate-pulse rounded-lg border p-4 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}
+        >
+          <div className={`h-4 w-28 rounded ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
+          <div className={`mt-3 h-3 w-48 rounded ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+          <div className={`mt-3 h-3 w-36 rounded ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export function NotificationChatModal({ theme, onClose }: NotificationChatModalProps) {
@@ -81,6 +82,10 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
 
   const handleAddNotificationChat = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+
+    if (isLoading) {
+      return
+    }
 
     if (!employeeName.trim() || !chatId.trim()) {
       setError('직원 이름과 채팅방 ID를 모두 입력해주세요.')
@@ -142,7 +147,7 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
               알림 채팅방
             </h2>
             <p className={`mt-1 text-sm font-semibold ${mutedTextClass}`}>
-              등록된 채팅방 {notificationChats.length}개
+              {isLoading ? '채팅방 목록 확인 중' : `등록된 채팅방 ${notificationChats.length}개`}
             </p>
           </div>
           <button
@@ -163,9 +168,7 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
 
           <div className="space-y-3">
             {isLoading ? (
-              <div className={`rounded-lg border p-5 text-center ${subtlePanelClass}`}>
-                <p className="text-sm font-black">채팅방 목록을 불러오는 중입니다.</p>
-              </div>
+              <NotificationChatSkeletonList isDark={isDark} />
             ) : notificationChats.length === 0 ? (
               <div className={`rounded-lg border p-5 text-center ${subtlePanelClass}`}>
                 <p className="text-sm font-black">등록된 채팅방이 없습니다.</p>
@@ -182,14 +185,11 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
                       <p className={`mt-1 break-all font-mono text-xs font-bold ${mutedTextClass}`}>
                         chat_id {item.chatId}
                       </p>
-                      <p className={`mt-2 text-xs font-semibold ${mutedTextClass}`}>
-                        ID {item.id} / {formatDate(item.createdAt)}
-                      </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => void handleDeleteNotificationChat(item.id)}
-                      disabled={deletingId === item.id}
+                      disabled={isLoading || deletingId === item.id}
                       className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {deletingId === item.id ? '삭제 중' : '삭제'}
@@ -210,6 +210,7 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
                   <input
                     value={employeeName}
                     onChange={(event) => setEmployeeName(event.target.value)}
+                    disabled={isLoading || isSubmitting}
                     className={`mt-2 h-11 w-full rounded-md border px-3 text-sm font-bold outline-none transition focus:ring-4 ${fieldClass}`}
                     placeholder="홍길동"
                   />
@@ -219,6 +220,7 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
                   <input
                     value={chatId}
                     onChange={(event) => setChatId(event.target.value)}
+                    disabled={isLoading || isSubmitting}
                     className={`mt-2 h-11 w-full rounded-md border px-3 text-sm font-bold outline-none transition focus:ring-4 ${fieldClass}`}
                     placeholder="채팅방 ID"
                   />
@@ -231,14 +233,14 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
                     setIsAdding(false)
                     setError('')
                   }}
-                  disabled={isSubmitting}
+                  disabled={isLoading || isSubmitting}
                   className={`rounded-md border px-4 py-2 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${isDark ? 'border-slate-700 bg-slate-900 hover:bg-slate-800' : 'border-slate-300 bg-white hover:bg-slate-100'}`}
                 >
                   취소
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isLoading || isSubmitting}
                   className="rounded-md border border-sky-600 bg-sky-600 px-4 py-2 text-xs font-black text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSubmitting ? '추가 중' : '추가'}
@@ -253,7 +255,8 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
                   setIsAdding(true)
                   setError('')
                 }}
-                className="rounded-md border border-emerald-500 bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100"
+                disabled={isLoading}
+                className="rounded-md border border-emerald-500 bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 추가
               </button>

@@ -1,26 +1,15 @@
 import type { ChangeEvent, RefObject } from 'react'
 
-/** 편집모드 상단의 확대, undo/redo, JSON/INP 입출력 제어 버튼 묶음이다. */
+/** 편집 세팅의 JSON/INP 입출력 제어 버튼 묶음이다. */
 export function EditorActionToolbar({
   isDark,
   controlBarClassName,
-  panelMutedClassName,
-  buttonClassName,
-  buttonMutedClassName,
-  editorZoom,
-  zoomStep,
-  canUndo,
-  canRedo,
   isScenarioReadOnly,
   isScenarioEditMode,
   isExportingInp,
   isExportingPng,
   swmmEngineUrl,
   fileInputRef,
-  onZoomChange,
-  onZoomReset,
-  onUndo,
-  onRedo,
   onExportJson,
   onExportInp,
   onExportPng,
@@ -30,23 +19,12 @@ export function EditorActionToolbar({
 }: {
   isDark: boolean
   controlBarClassName: string
-  panelMutedClassName: string
-  buttonClassName: string
-  buttonMutedClassName: string
-  editorZoom: number
-  zoomStep: number
-  canUndo: boolean
-  canRedo: boolean
   isScenarioReadOnly: boolean
   isScenarioEditMode: boolean
   isExportingInp: boolean
   isExportingPng: boolean
   swmmEngineUrl: string
   fileInputRef: RefObject<HTMLInputElement | null>
-  onZoomChange: (delta: number) => void
-  onZoomReset: () => void
-  onUndo: () => void
-  onRedo: () => void
   onExportJson: () => void
   onExportInp: () => void
   onExportPng: () => void
@@ -57,50 +35,6 @@ export function EditorActionToolbar({
   return (
     <div className={`${isSheet ? '' : 'sticky top-0 z-40 shadow-sm backdrop-blur'} flex min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3 ${controlBarClassName}`}>
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <div className={`flex items-center gap-1 rounded-md border p-1 ${panelMutedClassName}`}>
-          <button
-            type="button"
-            onClick={() => onZoomChange(-zoomStep)}
-            className={`rounded px-2.5 py-1.5 text-xs font-black ${buttonClassName}`}
-          >
-            축소
-          </button>
-          <span className={`min-w-12 text-center text-xs font-black ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
-            {Math.round(editorZoom * 100)}%
-          </span>
-          <button
-            type="button"
-            onClick={() => onZoomChange(zoomStep)}
-            className={`rounded px-2.5 py-1.5 text-xs font-black ${buttonClassName}`}
-          >
-            확대
-          </button>
-          <button
-            type="button"
-            onClick={onZoomReset}
-            className={`rounded px-2.5 py-1.5 text-xs font-black ${buttonMutedClassName}`}
-          >
-            초기화
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={onUndo}
-          disabled={!canUndo || isScenarioReadOnly}
-          className={`rounded-md border px-3 py-2 text-xs font-black disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500 ${buttonClassName}`}
-          title="Command/Ctrl + Z"
-        >
-          되돌리기
-        </button>
-        <button
-          type="button"
-          onClick={onRedo}
-          disabled={!canRedo || isScenarioReadOnly}
-          className={`rounded-md border px-3 py-2 text-xs font-black disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500 ${buttonClassName}`}
-          title="Command/Ctrl + Shift + Z"
-        >
-          다시 실행
-        </button>
         <button
           type="button"
           onClick={onExportJson}

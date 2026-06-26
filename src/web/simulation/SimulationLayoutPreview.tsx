@@ -2491,7 +2491,7 @@ export function SimulationLayoutPreview({
                 onClick={onToggleFullscreen}
                 aria-label="시뮬레이션 전체화면"
                 title="시뮬레이션 전체화면"
-                className={`absolute right-2 top-2 z-30 flex h-12 w-12 items-center justify-center rounded-full border shadow-xl backdrop-blur transition ${
+                className={`absolute right-2 top-2 z-30 flex ${isMobileInput ? 'h-12 w-12' : 'h-[58px] w-[58px] [&>svg]:h-6 [&>svg]:w-6'} items-center justify-center rounded-full border shadow-xl backdrop-blur transition ${
                   isDark
                     ? 'border-white/20 bg-slate-950/88 text-white hover:bg-slate-900'
                     : 'border-slate-200 bg-white/92 text-slate-800 hover:bg-slate-50'

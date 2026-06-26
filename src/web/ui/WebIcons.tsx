@@ -54,3 +54,39 @@ export function CloseIcon({ className = 'h-5 w-5' }: WebIconProps) {
     </svg>
   )
 }
+
+export function UndoIcon({ className = 'h-5 w-5' }: WebIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 7 4 12l5 5" />
+      <path d="M5 12h9a6 6 0 0 1 6 6v1" />
+    </svg>
+  )
+}
+
+export function RedoIcon({ className = 'h-5 w-5' }: WebIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m15 7 5 5-5 5" />
+      <path d="M19 12h-9a6 6 0 0 0-6 6v1" />
+    </svg>
+  )
+}
