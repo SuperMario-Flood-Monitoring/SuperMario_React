@@ -454,6 +454,30 @@ export function SimulationWorkbench({
   const previewSelectionClearedRef = useRef(false)
   const runtimeSheetDragStartYRef = useRef<number | null>(null)
 
+  useEffect(() => {
+    const root = document.documentElement
+
+    const updateVisualViewportVars = () => {
+      const visualViewport = window.visualViewport
+      const height = visualViewport?.height ?? window.innerHeight
+      const offsetTop = visualViewport?.offsetTop ?? 0
+
+      root.style.setProperty('--app-visual-height', `${height}px`)
+      root.style.setProperty('--app-visual-offset-top', `${offsetTop}px`)
+    }
+
+    updateVisualViewportVars()
+    window.addEventListener('resize', updateVisualViewportVars)
+    window.visualViewport?.addEventListener('resize', updateVisualViewportVars)
+    window.visualViewport?.addEventListener('scroll', updateVisualViewportVars)
+
+    return () => {
+      window.removeEventListener('resize', updateVisualViewportVars)
+      window.visualViewport?.removeEventListener('resize', updateVisualViewportVars)
+      window.visualViewport?.removeEventListener('scroll', updateVisualViewportVars)
+    }
+  }, [])
+
   const layout = loadedLayout.layout
   const layoutSource = loadedLayout.source
   const exportLayout = useMemo(() => normalizeRelationAttachments(layout), [layout])
@@ -1078,14 +1102,18 @@ export function SimulationWorkbench({
   )
   const scenarioSettingsSheet = isScenarioSettingsOpen ? (
     <div
-      className={`fixed inset-0 z-[220] flex bg-slate-950/45 ${isMobileInput ? 'items-end justify-center' : 'items-stretch justify-end'}`}
+      className={`fixed z-[220] flex bg-slate-950/45 ${
+        isMobileInput
+          ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end justify-center'
+          : 'inset-0 items-stretch justify-end'
+      }`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="scenario-settings-title"
       onMouseDown={() => setIsScenarioSettingsOpen(false)}
     >
       <section
-        className={`${isMobileInput ? 'max-h-[88vh] w-screen rounded-t-2xl border-x-0 border-b-0 border-t' : 'h-screen w-[420px] max-w-[92vw] border-l'} overflow-hidden shadow-2xl ${
+        className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-16px)] w-screen rounded-t-2xl border-x-0 border-b-0 border-t' : 'h-screen w-[420px] max-w-[92vw] border-l'} overflow-hidden shadow-2xl ${
           isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-950'
         }`}
         onMouseDown={(event) => event.stopPropagation()}
@@ -1106,7 +1134,7 @@ export function SimulationWorkbench({
           </button>
         </header>
 
-        <div className={`${isMobileInput ? 'max-h-[calc(88vh-76px)]' : 'h-[calc(100vh-76px)]'} overflow-y-auto px-5 py-4`}>
+        <div className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-92px)] pb-[calc(env(safe-area-inset-bottom)+16px)]' : 'h-[calc(100vh-76px)] py-4'} overflow-y-auto px-5 pt-4`}>
           <div className="space-y-5">
             <section>
               <h3 className="text-sm font-black">시나리오</h3>
@@ -1204,14 +1232,18 @@ export function SimulationWorkbench({
   ) : null
   const runtimeInfoSheet = isInfoPanelOpen && selectedPreviewNode ? (
     <div
-      className={`fixed inset-0 z-[220] flex bg-slate-950/45 ${isMobileInput ? 'items-end justify-center' : 'items-stretch justify-end'}`}
+      className={`fixed z-[220] flex bg-slate-950/45 ${
+        isMobileInput
+          ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end justify-center'
+          : 'inset-0 items-stretch justify-end'
+      }`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="runtime-info-sheet-title"
       onClick={() => setIsInfoPanelOpen(false)}
     >
       <section
-        className={`${isMobileInput ? 'max-h-[88vh] w-screen rounded-t-2xl border-x-0 border-b-0 border-t' : 'h-screen w-[430px] max-w-[92vw] border-l'} overflow-hidden shadow-2xl ${
+        className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-16px)] w-screen rounded-t-2xl border-x-0 border-b-0 border-t' : 'h-screen w-[430px] max-w-[92vw] border-l'} overflow-hidden shadow-2xl ${
           isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-950'
         }`}
         onClick={(event) => event.stopPropagation()}
@@ -1256,7 +1288,7 @@ export function SimulationWorkbench({
             닫기
           </button>
         </header>
-        <div className={`${isMobileInput ? 'max-h-[calc(88vh-96px)]' : 'h-[calc(100vh-80px)]'} overflow-y-auto px-5 py-4`}>
+        <div className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-112px)] pb-[calc(env(safe-area-inset-bottom)+16px)]' : 'h-[calc(100vh-80px)] py-4'} overflow-y-auto px-5 pt-4`}>
           {infoPanelContent}
         </div>
       </section>

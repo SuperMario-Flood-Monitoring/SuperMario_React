@@ -2925,6 +2925,30 @@ export function EditorCanvas({
     lastClientY: number
   } | null>(null)
   const mobileMoveArmedNodeIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const root = document.documentElement
+
+    const updateVisualViewportVars = () => {
+      const visualViewport = window.visualViewport
+      const height = visualViewport?.height ?? window.innerHeight
+      const offsetTop = visualViewport?.offsetTop ?? 0
+
+      root.style.setProperty('--app-visual-height', `${height}px`)
+      root.style.setProperty('--app-visual-offset-top', `${offsetTop}px`)
+    }
+
+    updateVisualViewportVars()
+    window.addEventListener('resize', updateVisualViewportVars)
+    window.visualViewport?.addEventListener('resize', updateVisualViewportVars)
+    window.visualViewport?.addEventListener('scroll', updateVisualViewportVars)
+
+    return () => {
+      window.removeEventListener('resize', updateVisualViewportVars)
+      window.visualViewport?.removeEventListener('resize', updateVisualViewportVars)
+      window.visualViewport?.removeEventListener('scroll', updateVisualViewportVars)
+    }
+  }, [])
   const suppressCoordinateEditFollowUpClickUntilRef = useRef(0)
   const nextNodeIndex = layout.nodes.length + 1
   const isScenarioReadOnly = Boolean(selectedScenario && !isScenarioEditMode)
@@ -5064,11 +5088,15 @@ export function EditorCanvas({
   )
   const editorSettingsSheet = isEditorSettingsOpen ? (
     <div
-      className={`fixed inset-0 z-[220] flex bg-slate-950/55 ${isMobileInput ? 'items-end' : 'items-stretch justify-end'}`}
+      className={`fixed z-[220] flex bg-slate-950/55 ${
+        isMobileInput
+          ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end'
+          : 'inset-0 items-stretch justify-end'
+      }`}
       onClick={() => setIsEditorSettingsOpen(false)}
     >
       <section
-        className={`${isMobileInput ? 'max-h-[86vh] w-screen rounded-t-2xl border-t' : 'h-screen w-[460px] max-w-[92vw] border-l'} overflow-hidden shadow-2xl ${
+        className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-16px)] w-screen rounded-t-2xl border-t' : 'h-screen w-[460px] max-w-[92vw] border-l'} overflow-hidden shadow-2xl ${
           isDark ? 'border-slate-800 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
         }`}
         role="dialog"
@@ -5095,7 +5123,7 @@ export function EditorCanvas({
             <CloseIcon />
           </button>
         </header>
-        <div className={`${isMobileInput ? 'max-h-[calc(86vh-85px)]' : 'h-[calc(100vh-85px)]'} overflow-y-auto`}>
+        <div className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-101px)] pb-[calc(env(safe-area-inset-bottom)+16px)]' : 'h-[calc(100vh-85px)]'} overflow-y-auto`}>
           {scenarioToolbar}
           {actionToolbar}
         </div>
@@ -5183,14 +5211,14 @@ export function EditorCanvas({
   )
   const editorInfoSheet = isMobileInput && isEditorInfoPanelOpen ? (
     <div
-      className="fixed inset-0 z-[220] flex items-end bg-slate-950/55"
+      className="fixed bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] z-[220] flex h-[var(--app-visual-height,100dvh)] items-end bg-slate-950/55"
       role="dialog"
       aria-modal="true"
       aria-labelledby="editor-info-sheet-title"
       onClick={() => setIsEditorInfoPanelOpen(false)}
     >
       <section
-        className={`max-h-[86vh] w-screen overflow-hidden rounded-t-2xl border-t shadow-2xl ${
+        className={`max-h-[calc(var(--app-visual-height,100dvh)-16px)] w-screen overflow-hidden rounded-t-2xl border-t shadow-2xl ${
           isDark ? 'border-slate-800 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
         }`}
         onClick={(event) => event.stopPropagation()}
@@ -5212,7 +5240,7 @@ export function EditorCanvas({
             <CloseIcon />
           </button>
         </header>
-        <div className="max-h-[calc(86vh-96px)] overflow-y-auto px-5 py-4">
+        <div className="max-h-[calc(var(--app-visual-height,100dvh)-112px)] overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4">
           {editorInfoPanelContent}
         </div>
       </section>
@@ -5412,6 +5440,7 @@ export function EditorCanvas({
   ) : null
   const editorZoomRatio = editorZoom / EDITOR_ZOOM_DEFAULT
   const mobileCanvasScale = isMobileInput ? Math.max(1, editorZoomRatio) : 1
+  const mobileCanvasAspectRatio = canvasWidth / canvasHeight
   const renderedEditorViewBox = isMobileInput ? mobileScrollViewBox : editorViewBox
   const mobileEditorLocksScroll = false
   const editorZoomControls = (
@@ -5510,7 +5539,7 @@ export function EditorCanvas({
             style={isMobileInput ? {
               minWidth: '100%',
               minHeight: '100%',
-              width: `${mobileCanvasScale * 100}%`,
+              width: `max(${mobileCanvasScale * 100}%, calc(var(--app-visual-height, 100dvh) * ${mobileCanvasAspectRatio} * ${mobileCanvasScale}))`,
               height: `${mobileCanvasScale * 100}%`,
             } : undefined}
           >

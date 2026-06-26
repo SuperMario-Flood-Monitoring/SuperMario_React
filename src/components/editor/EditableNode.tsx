@@ -265,6 +265,14 @@ export const EditableNode = memo(function EditableNode({
       onPointerEnter={() => onPointerEnter(node)}
       onContextMenu={(event) => onNodeContextMenu(node, event)}
     >
+      <rect
+        x="-10"
+        y="-10"
+        width={node.width + 20}
+        height={node.height + 20}
+        fill="transparent"
+        pointerEvents="all"
+      />
       <NodeBody node={node} selected={selected} />
       {showResizeHandles && hasManualResizableEdge(node) ? renderResizeHandles(node, onResizePointerDown) : null}
       {renderablePorts.map((port) => {

@@ -237,12 +237,14 @@ export function EditorContextMenu({
   if (isMobileSheet) {
     return (
       <div
-        className={`fixed inset-0 z-[230] flex items-end ${isCanvasAddMenu ? 'bg-transparent' : 'bg-slate-950/55'}`}
+        className={`fixed bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] z-[230] flex h-[var(--app-visual-height,100dvh)] items-end ${
+          isCanvasAddMenu ? 'pointer-events-none bg-transparent' : 'bg-slate-950/55'
+        }`}
         onClick={onClose}
       >
         <div
           data-editor-context-menu="true"
-          className={`max-h-[78vh] w-screen overflow-y-auto rounded-t-2xl border-t py-2 shadow-2xl ${menuFrameClassName}`}
+          className={`pointer-events-auto max-h-[calc(var(--app-visual-height,100dvh)-16px)] w-screen overflow-y-auto rounded-t-2xl border-t pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 shadow-2xl ${menuFrameClassName}`}
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
         >
