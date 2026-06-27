@@ -1169,7 +1169,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     <div
       className={`fixed z-[220] flex ${
         isMobileInput
-          ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end justify-center bg-slate-950/45'
+          ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end justify-center'
           : 'inset-0 items-stretch justify-end'
       }`}
       role="dialog"

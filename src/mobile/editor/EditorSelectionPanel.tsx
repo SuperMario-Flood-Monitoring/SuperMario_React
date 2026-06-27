@@ -7,23 +7,18 @@ import {
   LINK_ROUTE_OPTIONS,
   LINK_TYPE_OPTIONS,
   MANHOLE_KIND_LABELS,
-  MANHOLE_KIND_OPTIONS,
   MIN_MANHOLE_HEIGHT,
   MIN_ROAD_WIDTH,
   MIN_TERRAIN_HEIGHT,
   MIN_TERRAIN_WIDTH,
   NODE_LABELS,
   OUTFALL_KIND_LABELS,
-  OUTFALL_KIND_OPTIONS,
   PIPE_KIND_LABELS,
   PIPE_KIND_OPTIONS,
   PIPE_SIZE_LABELS,
   PIPE_SIZE_OPTIONS,
-  SELECTABLE_FACILITY_KIND_OPTIONS,
   TERRAIN_KIND_LABELS,
-  TERRAIN_KIND_OPTIONS,
 } from './editorDefinitions'
-import { snapNodeToGround } from './editorNodePlacement'
 import {
   getLinkPipeKind,
   getNodeFacilityKind,
@@ -32,13 +27,6 @@ import {
   getNodePipeKind,
   getNodePipeSize,
   getNodeTerrainKind,
-  normalizeNodePorts,
-  resizeNodeForFacilityKind,
-  resizeNodeForManholeKind,
-  resizeNodeForOutfallKind,
-  resizeNodeForPipeSize,
-  resizeNodeForTerrainKind,
-  resizeNodeForType,
 } from './editorNodeHelpers'
 import { clampPercent } from '../../services/swmm/editorRuntime'
 import {
@@ -46,7 +34,6 @@ import {
   type EditorLink,
   type EditorLinkType,
   type EditorNode,
-  type EditorNodeType,
   type EditorPipeSize,
 } from './editorTypes'
 import type { WorkbenchTheme } from '../theme/workbenchTheme'
@@ -81,7 +68,6 @@ export function SelectionPanel({
   connectedLinks,
   groundSurfaceY,
   onUpdateNode,
-  onRotateNode,
   onUpdateLink,
   onUpdateLinkProps,
   onDeleteSelection,
@@ -92,7 +78,6 @@ export function SelectionPanel({
   connectedLinks: EditorLink[]
   groundSurfaceY: number
   onUpdateNode: (nodeId: string, updates: Partial<EditorNode>) => void
-  onRotateNode: (nodeId: string) => void
   onUpdateLink: (linkId: string, updates: Partial<Omit<EditorLink, 'props'>>) => void
   onUpdateLinkProps: (linkId: string, updates: Partial<EditorLink['props']>) => void
   onDeleteSelection: () => void
@@ -148,18 +133,6 @@ export function SelectionPanel({
       : node.type === 'terrain'
         ? MIN_TERRAIN_HEIGHT
         : 20
-    const handleNodeTypeChange = (nextType: EditorNodeType) => {
-      const updates = resizeNodeForType(node, nextType)
-      const nextNode = snapNodeToGround(
-        normalizeNodePorts({
-          ...node,
-          ...updates,
-        }),
-        groundSurfaceY,
-      )
-
-      onUpdateNode(node.id, nextNode)
-    }
 
     return (
       <div className={`mt-5 rounded-lg border p-4 ${panelClassName}`}>
@@ -189,94 +162,28 @@ export function SelectionPanel({
         <Definition theme={theme} label="id" value={node.id} />
         <Definition theme={theme} label="type" value={node.type} />
         {hasFacilityType && (
-          <SelectField
-            theme={theme}
-            label="객체 종류"
-            value={node.type}
-            options={FACILITY_TYPE_OPTIONS}
-            optionLabels={NODE_LABELS}
-            onChange={handleNodeTypeChange}
-          />
+          <Definition theme={theme} label="객체 종류" value={NODE_LABELS[node.type] ?? node.type} />
         )}
         {hasFacilityKind && (
-          <SelectField
-            theme={theme}
-            label="시설 세부 종류"
-            value={getNodeFacilityKind(node)}
-            options={SELECTABLE_FACILITY_KIND_OPTIONS}
-            optionLabels={FACILITY_KIND_LABELS}
-            onChange={(value) => onUpdateNode(node.id, resizeNodeForFacilityKind(node, value))}
-          />
+          <Definition theme={theme} label="시설 세부 종류" value={FACILITY_KIND_LABELS[getNodeFacilityKind(node)]} />
         )}
         {hasOutfallKind && (
-          <SelectField
-            theme={theme}
-            label="방류구 종류"
-            value={getNodeOutfallKind(node)}
-            options={OUTFALL_KIND_OPTIONS}
-            optionLabels={OUTFALL_KIND_LABELS}
-            onChange={(value) => onUpdateNode(node.id, resizeNodeForOutfallKind(node, value))}
-          />
+          <Definition theme={theme} label="방류구 종류" value={OUTFALL_KIND_LABELS[getNodeOutfallKind(node)]} />
         )}
         {hasManholeKind && (
-          <SelectField
-            theme={theme}
-            label="맨홀 종류"
-            value={getNodeManholeKind(node)}
-            options={MANHOLE_KIND_OPTIONS}
-            optionLabels={MANHOLE_KIND_LABELS}
-            onChange={(value) => onUpdateNode(node.id, resizeNodeForManholeKind(node, value))}
-          />
+          <Definition theme={theme} label="맨홀 종류" value={MANHOLE_KIND_LABELS[getNodeManholeKind(node)]} />
         )}
         {hasTerrainKind && (
-          <SelectField
-            theme={theme}
-            label="레이아웃 종류"
-            value={getNodeTerrainKind(node)}
-            options={TERRAIN_KIND_OPTIONS}
-            optionLabels={TERRAIN_KIND_LABELS}
-            onChange={(value) => onUpdateNode(node.id, resizeNodeForTerrainKind(node, value))}
-          />
+          <Definition theme={theme} label="레이아웃 종류" value={TERRAIN_KIND_LABELS[getNodeTerrainKind(node)]} />
         )}
         {hasConnectorType && (
-          <SelectField
-            theme={theme}
-            label="커넥터 종류"
-            value={node.type}
-            options={CONNECTOR_TYPE_OPTIONS}
-            optionLabels={NODE_LABELS}
-            disabled={connectedLinks.length > 0}
-            onChange={handleNodeTypeChange}
-          />
-        )}
-        {hasConnectorType && connectedLinks.length > 0 && (
-          <p className={`mt-2 rounded-md px-2 py-2 text-xs font-bold leading-5 ${orangeNoticeClassName}`}>
-            연결된 커넥터는 포트 구성이 바뀌지 않도록 종류 변경이 잠겨 있습니다. 먼저 연결을 끊은 뒤 변경하세요.
-          </p>
+          <Definition theme={theme} label="커넥터 종류" value={NODE_LABELS[node.type] ?? node.type} />
         )}
         {hasPipeKind && (
-          <SelectField
-            theme={theme}
-            label="관 종류"
-            value={pipeKind}
-            options={PIPE_KIND_OPTIONS}
-            optionLabels={PIPE_KIND_LABELS}
-            onChange={(value) => onUpdateNode(node.id, {
-              props: {
-                ...node.props,
-                pipeKind: value,
-              },
-            })}
-          />
+          <Definition theme={theme} label="관 종류" value={PIPE_KIND_LABELS[pipeKind]} />
         )}
         {hasPipeSize && (
-          <SelectField
-            theme={theme}
-            label="굵기"
-            value={getNodePipeSize(node)}
-            options={PIPE_SIZE_OPTIONS}
-            onChange={(value) => onUpdateNode(node.id, resizeNodeForPipeSize(node, value as EditorPipeSize))}
-          />
+          <Definition theme={theme} label="굵기" value={PIPE_SIZE_LABELS[getNodePipeSize(node)]} />
         )}
 
         {hasNodeBlockageControl && (
@@ -295,19 +202,6 @@ export function SelectionPanel({
               })}
             />
           </div>
-        )}
-
-        {hasPipeSize && (
-          <button
-            type="button"
-            onClick={() => onRotateNode(node.id)}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-900 px-3 py-2 text-sm font-black text-white shadow-sm hover:bg-slate-800"
-            title="오른쪽으로 90도 회전"
-            aria-label={`${NODE_LABELS[node.type]} 오른쪽 90도 회전`}
-          >
-            <RotateClockwiseIcon />
-            오른쪽 90도 회전
-          </button>
         )}
 
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -482,34 +376,6 @@ export function SelectionPanel({
     <div className={`mt-5 rounded-lg border border-dashed p-4 text-sm font-semibold ${isDark ? 'border-slate-800 bg-slate-900 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
       객체나 링크를 선택하면 id, swmmId, type, 연결 상태가 여기에 표시됩니다.
     </div>
-  )
-}
-
-function RotateClockwiseIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      className="shrink-0"
-    >
-      <path
-        d="M19 7v5h-5"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M18.2 12A6.2 6.2 0 1 0 16 16.7"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   )
 }
 

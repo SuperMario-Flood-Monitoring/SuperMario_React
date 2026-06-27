@@ -3,6 +3,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type TouchEvent as ReactTouchEvent,
   type WheelEvent as ReactWheelEvent,
   memo,
   useCallback,
@@ -146,6 +147,7 @@ import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchT
 import { CloseIcon, GearIcon, RedoIcon, UndoIcon } from '../ui/WebIcons'
 import { WebPortal } from '../ui/WebPortal'
 import { WebZoomControls } from '../ui/WebZoomControls'
+import { MobileBottomSheet } from '../../shared/ui/MobileBottomSheet'
 import {
   type EditorEndpoint,
   type EditorLayout,
@@ -3000,6 +3002,13 @@ export const EditorCanvas = memo(function EditorCanvas({
   const mobileEditorSettingsSheetRef = useRef<HTMLElement | null>(null)
   const mobileEditorInfoSheetRef = useRef<HTMLElement | null>(null)
   const mobileRelationPreviewSheetRef = useRef<HTMLElement | null>(null)
+  const relationPreviewPinchRef = useRef<{
+    startDistance: number
+    startZoom: number
+    anchorContentX: number
+    anchorContentY: number
+  } | null>(null)
+  const relationPreviewPinchFrameRef = useRef<number | null>(null)
   const mobileNodeTapCandidateRef = useRef<{
     pointerId: number
     node: EditorNode
@@ -3039,6 +3048,43 @@ export const EditorCanvas = memo(function EditorCanvas({
   const suppressCoordinateEditFollowUpClickUntilRef = useRef(0)
   const nextNodeIndex = layout.nodes.length + 1
   const isScenarioReadOnly = Boolean(selectedScenario && !isScenarioEditMode)
+  const isScenarioReadOnlyRef = useRef(isScenarioReadOnly)
+  const editorToastTimerRef = useRef<number | null>(null)
+  const [editorToastMessage, setEditorToastMessage] = useState<string | null>(null)
+  const showEditorToast = useCallback((message: string) => {
+    if (editorToastTimerRef.current !== null) {
+      window.clearTimeout(editorToastTimerRef.current)
+    }
+
+    setEditorToastMessage(message)
+    editorToastTimerRef.current = window.setTimeout(() => {
+      setEditorToastMessage(null)
+      editorToastTimerRef.current = null
+    }, 2200)
+  }, [])
+  const blockReadOnlyScenarioAction = useCallback(() => {
+    if (!isScenarioReadOnlyRef.current) {
+      return false
+    }
+
+    showEditorToast('시나리오 수정 버튼을 누른 뒤 편집할 수 있습니다.')
+    return true
+  }, [showEditorToast])
+
+  useEffect(() => {
+    isScenarioReadOnlyRef.current = isScenarioReadOnly
+  }, [isScenarioReadOnly])
+
+  useEffect(() => () => {
+    if (editorToastTimerRef.current !== null) {
+      window.clearTimeout(editorToastTimerRef.current)
+    }
+
+    if (relationPreviewPinchFrameRef.current !== null) {
+      window.cancelAnimationFrame(relationPreviewPinchFrameRef.current)
+    }
+  }, [])
+
   const { nodesById, linksById, relationLinksByNodeId } = useLayoutIndexes(layout)
   const renderNodesById = useMemo(() => {
     if (
@@ -3601,7 +3647,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // 오른쪽 선택 패널에서 발생하는 노드 편집 액션이다. 길이 변경은 relation 전파 규칙으로 넘긴다.
   const updateNode = (nodeId: string, updates: Partial<EditorNode>) => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -3671,7 +3717,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   }
 
   const applyMobileResizeStep = useCallback((nodeId: string, edge: ResizeEdge, direction: 'shrink' | 'grow') => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -3712,10 +3758,10 @@ export const EditorCanvas = memo(function EditorCanvas({
         nodes: currentLayout.nodes.map((node) => (node.id === nodeId ? nextNode : node)),
       }
     })
-  }, [isScenarioReadOnly, setLayout])
+  }, [blockReadOnlyScenarioAction, setLayout])
 
   const applyMobileMoveStep = useCallback((nodeId: string, direction: 'left' | 'right' | 'up' | 'down') => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -3735,11 +3781,11 @@ export const EditorCanvas = memo(function EditorCanvas({
 
       return moveNodeIdsBy(currentLayout, capability.groupNodeIds, dx, dy)
     })
-  }, [isScenarioReadOnly, setLayout])
+  }, [blockReadOnlyScenarioAction, setLayout])
 
   // 회전 버튼 액션이다. ㄱ자 커넥터는 회전 후 포트 ID도 함께 재매핑해야 한다.
   const rotateNodeClockwise = (nodeId: string) => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -3792,7 +3838,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // link 본문 필드와 props 필드는 오른쪽 패널에서 따로 갱신한다.
   const updateLink = (linkId: string, updates: Partial<Omit<EditorLink, 'props'>>) => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -3804,7 +3850,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // link props는 relation/pipe link의 확장 메타데이터를 안전하게 병합한다.
   const updateLinkProps = (linkId: string, updates: Partial<EditorLink['props']>) => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -3826,7 +3872,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // Backspace/Delete와 버튼 삭제가 공유하는 선택 삭제 액션이다.
   const deleteSelection = useCallback(() => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -3867,7 +3913,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     setCoordinateEditState(null)
     setMarqueeSelectionState(null)
     setSelection(null)
-  }, [isScenarioReadOnly, selection, setLayout])
+  }, [blockReadOnlyScenarioAction, selection, setLayout])
 
   // undo/redo나 pointer 종료 전에 임시 인터랙션 상태를 닫고 history batch를 확정한다.
   const clearTransientEditorState = useCallback(() => {
@@ -3886,20 +3932,20 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // undo/redo는 drag/resize/attach 같은 임시 상태를 먼저 정리한 뒤 layout history만 이동한다.
   const undoEditorLayout = useCallback(() => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
     clearTransientEditorState()
     undoLayout()
-  }, [clearTransientEditorState, isScenarioReadOnly, undoLayout])
+  }, [blockReadOnlyScenarioAction, clearTransientEditorState, undoLayout])
 
   const redoEditorLayout = useCallback(() => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
     clearTransientEditorState()
     redoLayout()
-  }, [clearTransientEditorState, isScenarioReadOnly, redoLayout])
+  }, [blockReadOnlyScenarioAction, clearTransientEditorState, redoLayout])
 
   const handleLinkSelect = useCallback((linkId: string) => {
     setSelection({ kind: 'link', id: linkId })
@@ -3920,7 +3966,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   }, [layout, selection])
 
   const pasteSelection = useCallback(() => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return false
     }
 
@@ -3946,7 +3992,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       ? { kind: 'node', id: pastedNodeIds[0] }
       : { kind: 'multi', ids: pastedNodeIds })
     return true
-  }, [isScenarioReadOnly, layout, setLayout])
+  }, [blockReadOnlyScenarioAction, layout, setLayout])
 
   // 전역 키보드 단축키는 입력 필드 편집 중에는 동작하지 않게 제한한다.
   useEffect(() => {
@@ -3955,7 +4001,13 @@ export const EditorCanvas = memo(function EditorCanvas({
         return
       }
 
-      if (isScenarioReadOnly || isTextEditingTarget(event.target) || !selection) {
+      if (isTextEditingTarget(event.target) || !selection) {
+        return
+      }
+
+      if (isScenarioReadOnly) {
+        event.preventDefault()
+        blockReadOnlyScenarioAction()
         return
       }
 
@@ -3965,14 +4017,20 @@ export const EditorCanvas = memo(function EditorCanvas({
 
     window.addEventListener('keydown', handleDeleteKey)
     return () => window.removeEventListener('keydown', handleDeleteKey)
-  }, [deleteSelection, isScenarioReadOnly, selection])
+  }, [blockReadOnlyScenarioAction, deleteSelection, isScenarioReadOnly, selection])
 
   // macOS Command와 Windows/Linux Ctrl을 모두 같은 undo/redo modifier로 취급한다.
   useEffect(() => {
     const handleHistoryKey = (event: KeyboardEvent) => {
       const isPrimaryModifier = event.metaKey || event.ctrlKey
       const isUndoRedoKey = event.key.toLowerCase() === 'z'
-      if (isScenarioReadOnly || !isPrimaryModifier || !isUndoRedoKey || event.altKey || isTextEditingTarget(event.target)) {
+      if (!isPrimaryModifier || !isUndoRedoKey || event.altKey || isTextEditingTarget(event.target)) {
+        return
+      }
+
+      if (isScenarioReadOnly) {
+        event.preventDefault()
+        blockReadOnlyScenarioAction()
         return
       }
 
@@ -3986,7 +4044,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
     window.addEventListener('keydown', handleHistoryKey)
     return () => window.removeEventListener('keydown', handleHistoryKey)
-  }, [isScenarioReadOnly, redoEditorLayout, undoEditorLayout])
+  }, [blockReadOnlyScenarioAction, isScenarioReadOnly, redoEditorLayout, undoEditorLayout])
 
   // Cmd/Ctrl+C/V는 브라우저 기본 텍스트 복사 대신 editor selection 복사를 수행한다.
   useEffect(() => {
@@ -4084,7 +4142,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   }, [pendingPort])
 
   const openAddMenuAtViewportCenter = useCallback(() => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -4121,7 +4179,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       y: clientY,
       point,
     })
-  }, [clearLongPressTimer, isScenarioReadOnly])
+  }, [blockReadOnlyScenarioAction, clearLongPressTimer])
 
   const openMobileBaseGroundActionMenu = useCallback((
     point: Point,
@@ -4378,7 +4436,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // 객체 우클릭 메뉴에서 선택 객체 또는 선택 그룹의 z-order를 바꾼다.
   const changeContextNodeZOrder = (action: NodeZOrderAction) => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -4400,7 +4458,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     portId: string,
     event: ReactMouseEvent<SVGElement>,
   ) => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -4437,7 +4495,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     source: ContextMenuState['layoutAdd'],
     event: ReactPointerEvent<SVGGElement>,
   ) => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -4459,7 +4517,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     setDragState(null)
     setResizeState(null)
     setMarqueeSelectionState(null)
-  }, [isScenarioReadOnly])
+  }, [blockReadOnlyScenarioAction])
 
   // 기본 땅 배경의 좌/우/하단 edge에서 새 terrain을 이어 붙이는 진입점이다.
   const handleBaseLayoutAddPointerDown = useCallback((
@@ -4492,12 +4550,16 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // relation 포트 우클릭 메뉴에서 해체를 실행한다.
   const detachContextRelation = () => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
     const relationPort = contextMenu?.relationPort
     if (!relationPort) {
+      return
+    }
+
+    if (!window.confirm('관계를 해제할까요?')) {
       return
     }
 
@@ -4509,14 +4571,47 @@ export const EditorCanvas = memo(function EditorCanvas({
     setCoordinateEditState(null)
   }
 
+  const detachRelationByPortClick = (
+    relationId: string,
+    nodeId: string,
+    options: { keepPendingPort?: boolean } = {},
+  ) => {
+    if (blockReadOnlyScenarioAction()) {
+      return
+    }
+
+    if (!window.confirm('관계를 해제할까요?')) {
+      return
+    }
+
+    setLayout((currentLayout) => ({
+      ...currentLayout,
+      links: currentLayout.links.filter((link) => link.id !== relationId),
+    }))
+    if (options.keepPendingPort) {
+      setAttachTargetNodeId(nodeId)
+    } else {
+      setPendingPort(null)
+      setAttachTargetNodeId(null)
+    }
+    setContextMenu(null)
+    setCoordinateEditState(null)
+    setSelection({ kind: 'node', id: nodeId })
+  }
+
   // 모바일 객체 액션에서 parent 노드 기준으로 연결된 relation들을 한 번에 해체한다.
   const detachContextNodeParentRelations = () => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
     const nodeId = contextMenu?.nodeId
     if (!nodeId) {
+      return
+    }
+
+    const hasParentRelation = layout.links.some((link) => link.type === 'relation' && link.from.nodeId === nodeId)
+    if (!hasParentRelation || !window.confirm('관계를 해제할까요?')) {
       return
     }
 
@@ -4533,7 +4628,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // T자 객체 우클릭 메뉴에서 trunk 축 좌표 변경 모드로 진입한다.
   const startContextTeeCoordinateEdit = () => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -4565,7 +4660,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     clientX: number
     clientY: number
   }) => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -4601,7 +4696,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   }, [
     coordinateEditState,
     dragState,
-    isScenarioReadOnly,
+    blockReadOnlyScenarioAction,
     layout,
     marqueeSelectionState,
     resizeState,
@@ -4788,7 +4883,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // attach 모드의 두 번째 선택을 검증하고, snap 후 relation 링크 생성까지 마무리한다.
   const completePendingAttach = (nextPort: EditorPortSelection) => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return false
     }
 
@@ -5074,7 +5169,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     })
   }
 
-  // 포트 클릭은 attach 시작/완료만 담당하고, 이미 연결된 포트는 단순 선택으로 처리한다.
+  // 포트 클릭은 attach 시작/완료를 담당하고, 이미 연결된 포트는 클릭으로 바로 해제한다.
   const handlePortClick = (nodeId: string, portId: string, event: ReactMouseEvent<SVGElement>) => {
     event.stopPropagation()
     if (isScenarioReadOnly) {
@@ -5098,9 +5193,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       if (relationPreviewMode === 'parent') {
         const existingRelation = getRelationLinkForPort(layout, nextPort)
         if (existingRelation) {
-          setPendingPort(null)
-          setAttachTargetNodeId(null)
-          setSelection({ kind: 'node', id: nodeId })
+          detachRelationByPortClick(existingRelation.id, nodeId)
           return
         }
 
@@ -5118,6 +5211,12 @@ export const EditorCanvas = memo(function EditorCanvas({
         return
       }
 
+      const existingRelation = getRelationLinkForPort(layout, nextPort)
+      if (existingRelation) {
+        detachRelationByPortClick(existingRelation.id, nodeId, { keepPendingPort: true })
+        return
+      }
+
       completePendingAttach(nextPort)
       setRelationPreviewNodeId(null)
       setRelationPreviewMode('parent')
@@ -5132,9 +5231,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
     const existingRelation = getRelationLinkForPort(layout, nextPort)
     if (existingRelation) {
-      setPendingPort(null)
-      setAttachTargetNodeId(null)
-      setSelection({ kind: 'node', id: nodeId })
+      detachRelationByPortClick(existingRelation.id, nodeId)
       return
     }
 
@@ -5149,7 +5246,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // 우클릭 메뉴에서 시설/커넥터 같은 기본 노드를 추가하는 액션이다.
   const addNode = (type: EditorNodeType, point?: Point) => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -5180,7 +5277,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // 우클릭 메뉴의 독립 파이프 추가 액션이다.
   const addStandalonePipe = (point?: Point) => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -5223,7 +5320,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // 레이아웃 + 핸들에서 땅/하천/바다 terrain을 기존 레이아웃과 같은 높이로 체인 추가한다.
   const addLayoutNode = (kind: LayoutAddKind, source: ContextMenuState['layoutAdd']) => {
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -5283,7 +5380,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       return
     }
 
-    if (isScenarioReadOnly) {
+    if (blockReadOnlyScenarioAction()) {
       return
     }
 
@@ -5588,7 +5685,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     <div
       className={`fixed z-[220] flex ${
         isMobileInput
-          ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end bg-slate-950/55'
+          ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end'
           : 'inset-0 items-stretch justify-end'
       }`}
       onClick={(event) => {
@@ -5768,6 +5865,95 @@ export const EditorCanvas = memo(function EditorCanvas({
     RELATION_PREVIEW_ZOOM_MIN,
     Number.MAX_SAFE_INTEGER,
   )
+  const getRelationPreviewTouchDistance = (touches: ReactTouchEvent<HTMLDivElement>['touches']) => {
+    const firstTouch = touches.item(0)
+    const secondTouch = touches.item(1)
+
+    if (!firstTouch || !secondTouch) {
+      return 0
+    }
+
+    return Math.hypot(
+      firstTouch.clientX - secondTouch.clientX,
+      firstTouch.clientY - secondTouch.clientY,
+    )
+  }
+  const getRelationPreviewTouchFocalPoint = (
+    touches: ReactTouchEvent<HTMLDivElement>['touches'],
+    container: HTMLDivElement,
+  ) => {
+    const firstTouch = touches.item(0)
+    const secondTouch = touches.item(1)
+
+    if (!firstTouch || !secondTouch) {
+      return null
+    }
+
+    const rect = container.getBoundingClientRect()
+
+    return {
+      x: (firstTouch.clientX + secondTouch.clientX) / 2 - rect.left,
+      y: (firstTouch.clientY + secondTouch.clientY) / 2 - rect.top,
+    }
+  }
+  const handleRelationPreviewTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (event.touches.length < 2) {
+      return
+    }
+
+    const distance = getRelationPreviewTouchDistance(event.touches)
+    const focalPoint = getRelationPreviewTouchFocalPoint(event.touches, event.currentTarget)
+
+    if (distance <= 0 || !focalPoint) {
+      return
+    }
+
+    event.preventDefault()
+    relationPreviewPinchRef.current = {
+      startDistance: distance,
+      startZoom: relationPreviewSafeZoom,
+      anchorContentX: (event.currentTarget.scrollLeft + focalPoint.x) / relationPreviewSafeZoom,
+      anchorContentY: (event.currentTarget.scrollTop + focalPoint.y) / relationPreviewSafeZoom,
+    }
+  }
+  const handleRelationPreviewTouchMove = (event: ReactTouchEvent<HTMLDivElement>) => {
+    const pinchState = relationPreviewPinchRef.current
+
+    if (!pinchState || event.touches.length < 2) {
+      return
+    }
+
+    const distance = getRelationPreviewTouchDistance(event.touches)
+    const focalPoint = getRelationPreviewTouchFocalPoint(event.touches, event.currentTarget)
+
+    if (distance <= 0 || !focalPoint) {
+      return
+    }
+
+    event.preventDefault()
+    const nextZoom = Math.max(
+      RELATION_PREVIEW_ZOOM_MIN,
+      pinchState.startZoom * (distance / pinchState.startDistance),
+    )
+    const container = event.currentTarget
+
+    setRelationPreviewZoom(nextZoom)
+
+    if (relationPreviewPinchFrameRef.current !== null) {
+      window.cancelAnimationFrame(relationPreviewPinchFrameRef.current)
+    }
+
+    relationPreviewPinchFrameRef.current = window.requestAnimationFrame(() => {
+      container.scrollLeft = Math.max(0, pinchState.anchorContentX * nextZoom - focalPoint.x)
+      container.scrollTop = Math.max(0, pinchState.anchorContentY * nextZoom - focalPoint.y)
+      relationPreviewPinchFrameRef.current = null
+    })
+  }
+  const handleRelationPreviewTouchEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (event.touches.length < 2) {
+      relationPreviewPinchRef.current = null
+    }
+  }
   const relationPreviewViewBox = relationPreviewNode
     ? [
         relationPreviewNode.x - relationPreviewPadding,
@@ -5846,7 +6032,7 @@ export const EditorCanvas = memo(function EditorCanvas({
                   type="button"
                   disabled={Math.abs(relationPreviewSafeZoom - RELATION_PREVIEW_ZOOM_DEFAULT) < 0.001}
                   onClick={() => setRelationPreviewZoom(RELATION_PREVIEW_ZOOM_DEFAULT)}
-                  className={`flex h-9 w-12 items-center justify-center border-r text-xs ${
+                  className={`flex h-9 w-16 items-center justify-center border-r px-2 text-xs ${
                     isDark ? 'border-slate-800 hover:bg-slate-900' : 'border-slate-200 hover:bg-slate-50'
                   } disabled:cursor-not-allowed disabled:text-slate-500 disabled:opacity-60`}
                   aria-label="관계형성 미리보기 확대 초기화"
@@ -5868,9 +6054,14 @@ export const EditorCanvas = memo(function EditorCanvas({
               </div>
             </div>
             <div
-              className={`h-72 overflow-auto rounded-lg border ${
+              className={`min-h-[18rem] max-h-[min(48dvh,30rem)] overflow-auto rounded-lg border ${
                 isDark ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-white'
               }`}
+              onTouchStart={handleRelationPreviewTouchStart}
+              onTouchMove={handleRelationPreviewTouchMove}
+              onTouchEnd={handleRelationPreviewTouchEnd}
+              onTouchCancel={handleRelationPreviewTouchEnd}
+              style={{ touchAction: 'pan-x pan-y' }}
             >
               <svg
                 viewBox={relationPreviewViewBox}
@@ -5953,54 +6144,45 @@ export const EditorCanvas = memo(function EditorCanvas({
   const mobileDpadButtonClassName = 'flex h-10 w-10 items-center justify-center rounded-lg border text-lg font-black leading-none shadow-sm'
   const mobileDpadLabelClassName = 'flex h-10 w-10 items-center justify-center rounded-lg border text-[10px] font-black'
   const mobileEditorModeHud = isMobileInput && mobileEditorMode !== 'idle' && mobileActiveNodeId ? (
-    <div
-      className="fixed inset-x-0 bottom-0 z-[240] flex items-end"
-      aria-live="polite"
-    >
-      <section
-        ref={mobileEditorModeHudRef}
-        className={`w-screen rounded-t-2xl border-t px-4 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-2.5 shadow-2xl backdrop-blur ${
+    <MobileBottomSheet
+      theme={theme}
+      title={mobileEditorMode === 'move' ? '객체 이동' : '크기 조절'}
+      description={mobileEditorMode === 'move'
+        ? mobileMoveCapability?.canMoveY
+          ? '버튼으로 선택 객체를 상하좌우로 이동합니다.'
+          : '고정 객체와 연결되어 좌우 이동만 가능합니다.'
+        : mobileResizeCapability?.preferredEdge
+          ? '객체가 지원하는 방향만 조절할 수 있습니다.'
+          : '이 객체는 현재 크기 조절을 지원하지 않습니다.'}
+      closeLabel={mobileEditorMode === 'move' ? '객체 이동 완료' : '크기 조절 완료'}
+      zIndexClassName="z-[240]"
+      overlayClassName="fixed inset-x-0 bottom-0 flex items-end"
+      backdropClassName="pointer-events-none bg-transparent"
+      sheetClassName={`pointer-events-auto flex max-h-[50dvh] w-screen flex-col overflow-hidden rounded-t-2xl border-t shadow-2xl backdrop-blur ${
         isDark
           ? 'border-slate-800 bg-slate-950/96 text-slate-100'
           : 'border-slate-200 bg-white/96 text-slate-900'
       }`}
-      >
-        <div className="flex justify-center pb-2">
-          <span className={`h-1 w-10 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
-        </div>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-sm font-black">
-              {mobileEditorMode === 'move' ? '객체 이동' : '크기 조절'}
-            </div>
-            <div className={`mt-0.5 text-[11px] font-bold leading-4 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              {mobileEditorMode === 'move'
-                ? mobileMoveCapability?.canMoveY
-                  ? '버튼으로 선택 객체를 상하좌우로 이동합니다.'
-                  : '고정 객체와 연결되어 좌우 이동만 가능합니다.'
-                : mobileResizeCapability?.preferredEdge
-                  ? '객체가 지원하는 방향만 조절할 수 있습니다.'
-                  : '이 객체는 현재 크기 조절을 지원하지 않습니다.'}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              mobileMoveArmedNodeIdRef.current = null
-              setMobileMoveArmedNodeId(null)
-              setMobileEditorMode('idle')
-              setMobileActiveNodeId(null)
-            }}
-            className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[11px] font-black ${
-              isDark
-                ? 'border-slate-700 bg-slate-900 text-slate-100'
-                : 'border-slate-200 bg-slate-50 text-slate-700'
-            }`}
-          >
-            완료
-          </button>
-        </div>
-
+      headerClassName={`flex shrink-0 items-start justify-between gap-3 border-b px-4 py-3 ${
+        isDark ? 'border-slate-800' : 'border-slate-200'
+      }`}
+      bodyClassName="min-h-0 overflow-y-auto px-4 pb-0 pt-3"
+      closeButtonClassName={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[11px] font-black ${
+        isDark
+          ? 'border-slate-700 bg-slate-900 text-slate-100'
+          : 'border-slate-200 bg-slate-50 text-slate-700'
+      }`}
+      closeButtonContent="완료"
+      sectionRef={mobileEditorModeHudRef}
+      onHeightChange={setMobileEditorModeHudHeight}
+      lockBodyScroll={false}
+      onClose={() => {
+        mobileMoveArmedNodeIdRef.current = null
+        setMobileMoveArmedNodeId(null)
+        setMobileEditorMode('idle')
+        setMobileActiveNodeId(null)
+      }}
+    >
         {mobileEditorMode === 'move' ? (
           <div
             className={`mx-auto mt-3 grid w-max grid-cols-[40px_40px_40px] gap-1.5 ${
@@ -6116,8 +6298,7 @@ export const EditorCanvas = memo(function EditorCanvas({
             </button>
           </div>
         ) : null}
-      </section>
-    </div>
+    </MobileBottomSheet>
   ) : null
   const editorZoomRatio = editorZoom / EDITOR_ZOOM_DEFAULT
   const editorZoomPercentLabel = formatZoomPercentLabel(editorZoom, EDITOR_ZOOM_DEFAULT)
@@ -6521,6 +6702,19 @@ export const EditorCanvas = memo(function EditorCanvas({
         </div>
       ) : null}
       <WebPortal>
+        {editorToastMessage ? (
+          <div
+            className={`pointer-events-none fixed left-1/2 top-[calc(var(--app-visual-offset-top,0px)+16px)] z-[320] max-w-[calc(100vw-32px)] -translate-x-1/2 rounded-full border px-4 py-2 text-center text-xs font-black shadow-2xl backdrop-blur ${
+              isDark
+                ? 'border-white/15 bg-white text-slate-950'
+                : 'border-slate-950/10 bg-slate-950 text-white'
+            }`}
+            role="status"
+            aria-live="polite"
+          >
+            {editorToastMessage}
+          </div>
+        ) : null}
         {isMobileInput && !isEditorSettingsOpen ? (
           <div className="fixed bottom-5 right-8 z-[120] flex flex-col items-center gap-2">
             <button
@@ -6572,7 +6766,7 @@ export const EditorCanvas = memo(function EditorCanvas({
           setIsEditorInfoPanelOpen(true)
         }}
         onStartNodeRelation={() => {
-          if (isScenarioReadOnly || !contextMenu.nodeId) {
+          if (!contextMenu.nodeId || blockReadOnlyScenarioAction()) {
             return
           }
 

@@ -1083,7 +1083,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   ) : null
   const scenarioSettingsSheet = isScenarioSettingsOpen ? (
     <div
-      className={`fixed z-[220] flex bg-slate-950/45 ${
+      className={`fixed z-[220] flex ${
         isMobileInput
           ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end justify-center'
           : 'inset-0 items-stretch justify-end'
@@ -1091,11 +1091,17 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
       role="dialog"
       aria-modal="true"
       aria-labelledby="scenario-settings-title"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          setIsScenarioSettingsOpen(false)
+        }
+      }}
     >
       <section
         className={`${isMobileInput ? 'flex max-h-[50dvh] w-screen flex-col rounded-t-2xl border-x-0 border-b-0 border-t' : 'h-screen w-[420px] max-w-[92vw] border-l'} overflow-hidden shadow-2xl ${
           isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-950'
         }`}
+        onClick={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className={`flex shrink-0 items-center justify-between gap-3 border-b px-5 py-4 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>

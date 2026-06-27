@@ -65,6 +65,7 @@ export function EditorContextMenu({
 }) {
   const mobileAddToolbarFrameRef = useRef<HTMLDivElement | null>(null)
   const isCanvasAddMenu = !contextMenu.nodeId && !contextMenu.baseGround && !contextMenu.layoutAdd && !contextMenu.relationPort
+  const isMobileHStackAddMenu = isCanvasAddMenu || Boolean(contextMenu.layoutAdd)
   const isMobileNodeMenu = Boolean(contextMenu.nodeId || contextMenu.baseGround)
   const hasTransparentMobileBackdrop = isCanvasAddMenu || isMobileNodeMenu
   const isDark = theme === 'dark'
@@ -101,7 +102,7 @@ export function EditorContextMenu({
     : undefined
 
   useEffect(() => {
-    if (!isMobileSheet || !isCanvasAddMenu || !onMobileSheetHeightChange) {
+    if (!isMobileSheet || !isMobileHStackAddMenu || !onMobileSheetHeightChange) {
       return undefined
     }
 
@@ -123,7 +124,7 @@ export function EditorContextMenu({
       resizeObserver.disconnect()
       onMobileSheetHeightChange(0)
     }
-  }, [isCanvasAddMenu, isMobileSheet, onMobileSheetHeightChange])
+  }, [isMobileHStackAddMenu, isMobileSheet, onMobileSheetHeightChange])
 
   const runZOrderAction = (action: ContextNodeZOrderAction) => {
     onChangeNodeZOrder(action)
@@ -371,7 +372,7 @@ export function EditorContextMenu({
   )
 
   if (isMobileSheet) {
-    if (isCanvasAddMenu) {
+    if (isCanvasAddMenu || contextMenu.layoutAdd) {
       return (
         <div
           ref={mobileAddToolbarFrameRef}
@@ -382,45 +383,68 @@ export function EditorContextMenu({
           <div
             className={`pointer-events-auto grid w-full max-w-sm grid-cols-3 gap-2 rounded-2xl border p-2 shadow-2xl backdrop-blur ${mobileAddToolbarClassName}`}
           >
-            <button
-              type="button"
-              onClick={() => {
-                onAddNode('facility', contextMenu.point)
-                onClose()
-              }}
-              className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center transition ${mobileAddButtonClassName}`}
-              aria-label="시설 추가"
-              title="시설 추가"
-            >
-              <span className="text-2xl leading-none" aria-hidden="true">🏭</span>
-              <span className="text-[11px] font-black leading-none">시설</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onAddNode('connector', contextMenu.point)
-                onClose()
-              }}
-              className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center transition ${mobileAddButtonClassName}`}
-              aria-label="커넥터 추가"
-              title="커넥터 추가"
-            >
-              <span className="text-2xl leading-none" aria-hidden="true">🔌</span>
-              <span className="text-[11px] font-black leading-none">커넥터</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onAddStandalonePipe(contextMenu.point)
-                onClose()
-              }}
-              className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center transition ${mobileAddButtonClassName}`}
-              aria-label="파이프 추가"
-              title="파이프 추가"
-            >
-              <span className="text-2xl leading-none" aria-hidden="true">➡️</span>
-              <span className="text-[11px] font-black leading-none">파이프</span>
-            </button>
+            {contextMenu.layoutAdd ? (
+              LAYOUT_ADD_KIND_OPTIONS.map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => {
+                    onAddLayoutNode(kind, contextMenu.layoutAdd!)
+                    onClose()
+                  }}
+                  className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center transition ${mobileAddButtonClassName}`}
+                  aria-label={`${LAYOUT_ADD_KIND_LABELS[kind]} 추가`}
+                  title={`${LAYOUT_ADD_KIND_LABELS[kind]} 추가`}
+                >
+                  <span className="text-2xl leading-none" aria-hidden="true">
+                    {kind === 'ground' ? '▰' : kind === 'river' ? '≈' : '≋'}
+                  </span>
+                  <span className="text-[11px] font-black leading-none">{LAYOUT_ADD_KIND_LABELS[kind]}</span>
+                </button>
+              ))
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAddNode('facility', contextMenu.point)
+                    onClose()
+                  }}
+                  className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center transition ${mobileAddButtonClassName}`}
+                  aria-label="시설 추가"
+                  title="시설 추가"
+                >
+                  <span className="text-2xl leading-none" aria-hidden="true">🏭</span>
+                  <span className="text-[11px] font-black leading-none">시설</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAddNode('connector', contextMenu.point)
+                    onClose()
+                  }}
+                  className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center transition ${mobileAddButtonClassName}`}
+                  aria-label="커넥터 추가"
+                  title="커넥터 추가"
+                >
+                  <span className="text-2xl leading-none" aria-hidden="true">🔌</span>
+                  <span className="text-[11px] font-black leading-none">커넥터</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAddStandalonePipe(contextMenu.point)
+                    onClose()
+                  }}
+                  className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center transition ${mobileAddButtonClassName}`}
+                  aria-label="파이프 추가"
+                  title="파이프 추가"
+                >
+                  <span className="text-2xl leading-none" aria-hidden="true">➡️</span>
+                  <span className="text-[11px] font-black leading-none">파이프</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       )
