@@ -375,7 +375,7 @@ export function EditorContextMenu({
       return (
         <div
           ref={mobileAddToolbarFrameRef}
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-[230] flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+16px)]"
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-[230] flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+28px)]"
           data-editor-context-menu="true"
           onContextMenu={(event) => event.preventDefault()}
         >

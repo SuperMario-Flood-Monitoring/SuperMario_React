@@ -1,5 +1,4 @@
 import {
-  type CSSProperties,
   type ChangeEvent,
   type ReactNode,
   type WheelEvent as ReactWheelEvent,
@@ -1423,9 +1422,6 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     </div>
   )
   const controlBar = renderControlBar()
-  const floatingButtonVisualViewportStyle: CSSProperties | undefined = isMobileInput
-    ? { bottom: 'calc(var(--app-visual-bottom-inset, 0px) + env(safe-area-inset-bottom) + 20px)' }
-    : undefined
   const floatingSystemButtonClassName = isDark
     ? 'border-white bg-white text-slate-950 hover:bg-slate-100 focus-visible:ring-white'
     : 'border-slate-950 bg-slate-950 text-white hover:bg-slate-900 focus-visible:ring-slate-500'
@@ -1441,7 +1437,6 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
       aria-label="시나리오세팅"
       title="시나리오세팅"
       className={`fixed bottom-5 right-8 z-[120] flex ${floatingButtonSizeClassName} items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${floatingSystemButtonClassName}`}
-      style={floatingButtonVisualViewportStyle}
     >
       <GearIcon className={floatingButtonIconClassName} />
     </button>
@@ -1510,7 +1505,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     />
   ) : null
   const fullscreenActionMenu = isFullscreen ? (
-    <div className="fixed bottom-5 right-8 z-[150] flex flex-col items-end gap-2" style={floatingButtonVisualViewportStyle}>
+    <div className="fixed bottom-5 right-8 z-[150] flex flex-col items-end gap-2">
       <button
         type="button"
         onClick={() => setIsScenarioSettingsOpen(true)}

@@ -1,4 +1,4 @@
-import { type CSSProperties, type ChangeEvent, type ReactNode, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ChangeEvent, type ReactNode, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createDefaultEditorLayout } from '../editor/defaultLayout'
 import { PIPE_KIND_LABELS, SWMM_ENGINE_URL } from '../editor/editorDefinitions'
 import { normalizeRelationAttachments } from '../editor/editorRelations'
@@ -1114,7 +1114,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
           </button>
         </header>
 
-        <div className={`${isMobileInput ? 'min-h-0 pb-[calc(env(safe-area-inset-bottom)+16px)]' : 'h-[calc(100vh-76px)] py-4'} overflow-y-auto px-5 pt-4`}>
+        <div className={`${isMobileInput ? 'min-h-0 pb-[calc(env(safe-area-inset-bottom)+28px)]' : 'h-[calc(100vh-76px)] py-4'} overflow-y-auto px-5 pt-4`}>
           <div className="space-y-5">
             <section>
               <h3 className="text-sm font-black">시나리오</h3>
@@ -1260,7 +1260,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
             닫기
           </button>
         </header>
-        <div className={`${isMobileInput ? 'min-h-0 pb-[calc(env(safe-area-inset-bottom)+16px)]' : 'h-[calc(100vh-80px)] py-4'} overflow-y-auto px-5 pt-4`}>
+        <div className={`${isMobileInput ? 'min-h-0 pb-[calc(env(safe-area-inset-bottom)+28px)]' : 'h-[calc(100vh-80px)] py-4'} overflow-y-auto px-5 pt-4`}>
           {infoPanelContent}
         </div>
       </section>
@@ -1304,9 +1304,6 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     </div>
   )
   const controlBar = renderControlBar()
-  const floatingButtonVisualViewportStyle: CSSProperties | undefined = isMobileInput
-    ? { bottom: 'calc(var(--app-visual-bottom-inset, 0px) + env(safe-area-inset-bottom) + 20px)' }
-    : undefined
   const floatingSystemButtonClassName = isDark
     ? 'border-white bg-white text-slate-950 hover:bg-slate-100 focus-visible:ring-white'
     : 'border-slate-950 bg-slate-950 text-white hover:bg-slate-900 focus-visible:ring-slate-500'
@@ -1320,7 +1317,6 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
       aria-label="시나리오세팅"
       title="시나리오세팅"
       className={`fixed bottom-5 right-8 z-[120] flex h-12 w-12 items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${floatingSystemButtonClassName}`}
-      style={floatingButtonVisualViewportStyle}
     >
       <GearIcon className="h-4 w-4" />
     </button>
@@ -1392,7 +1388,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     />
   ) : null
   const fullscreenActionMenu = isFullscreen ? (
-    <div className="fixed bottom-5 right-8 z-[150] flex flex-col items-end gap-2" style={floatingButtonVisualViewportStyle}>
+    <div className="fixed bottom-5 right-8 z-[150] flex flex-col items-end gap-2">
       <button
         type="button"
         onClick={() => setIsScenarioSettingsOpen(true)}

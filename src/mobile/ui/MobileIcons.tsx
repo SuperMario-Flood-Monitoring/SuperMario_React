@@ -78,14 +78,12 @@ export function MapPinIcon({ className = 'h-16 w-16' }: MobileIconProps) {
       viewBox="0 0 24 24"
       aria-hidden="true"
       className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
     >
-      <path d="M12 21s7-5.3 7-12a7 7 0 1 0-14 0c0 6.7 7 12 7 12Z" />
-      <circle cx="12" cy="9" r="2.5" />
+      <path
+        d="M12 22.25c-.7 0-8.15-6.4-8.15-13.15A8.15 8.15 0 0 1 12 .95a8.15 8.15 0 0 1 8.15 8.15c0 6.75-7.45 13.15-8.15 13.15Z"
+        fill="currentColor"
+      />
+      <circle cx="12" cy="9.1" r="3.15" fill="var(--map-pin-hole, #ffffff)" />
     </svg>
   )
 }

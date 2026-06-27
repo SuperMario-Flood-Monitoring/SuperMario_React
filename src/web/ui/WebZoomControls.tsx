@@ -40,8 +40,8 @@ export function WebZoomControls({
   const resetIconClassName = isDark ? 'brightness-0' : 'brightness-0 invert'
 
   return (
-    <div className={`grid grid-cols-3 justify-items-center gap-y-1.5 ${className}`}>
-      <div className={`col-span-3 inline-flex h-12 overflow-hidden rounded-md border shadow-xl backdrop-blur ${surfaceClassName}`}>
+    <div className={`relative h-[78px] w-36 ${className}`}>
+      <div className={`absolute left-0 top-0 inline-flex h-12 w-36 overflow-hidden rounded-md border shadow-xl backdrop-blur ${surfaceClassName}`}>
         <button
           type="button"
           onClick={onZoomOut}
@@ -77,7 +77,7 @@ export function WebZoomControls({
           +
         </button>
       </div>
-      <div className={`col-start-2 min-w-12 rounded-md border px-2 py-1 text-center text-[11px] font-black leading-none shadow-lg backdrop-blur ${surfaceClassName}`}>
+      <div className={`absolute left-1/2 top-[54px] min-w-12 -translate-x-1/2 whitespace-nowrap rounded-md border px-2 py-1 text-center text-[11px] font-black leading-none shadow-lg backdrop-blur ${surfaceClassName}`}>
         {percentLabel}
       </div>
     </div>

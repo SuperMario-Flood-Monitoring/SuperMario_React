@@ -39,7 +39,7 @@ export function MobileBottomSheet({
   overlayClassName = 'fixed bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] flex h-[var(--app-visual-height,100dvh)] items-end',
   backdropClassName = 'bg-slate-950/55',
   sheetClassName,
-  bodyClassName = 'min-h-0 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4',
+  bodyClassName = 'min-h-0 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+28px)] pt-4',
   dataEditorContextMenu = false,
   role = 'dialog',
   ariaModal = true,

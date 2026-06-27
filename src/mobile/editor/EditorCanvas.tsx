@@ -5868,7 +5868,7 @@ export const EditorCanvas = memo(function EditorCanvas({
             <CloseIcon />
           </button>
         </header>
-        <div className={`${isMobileInput ? 'min-h-0 pb-[calc(env(safe-area-inset-bottom)+16px)]' : 'h-[calc(100vh-85px)]'} overflow-y-auto`}>
+        <div className={`${isMobileInput ? 'min-h-0 pb-[calc(env(safe-area-inset-bottom)+28px)]' : 'h-[calc(100vh-85px)]'} overflow-y-auto`}>
           {scenarioToolbar}
           {actionToolbar}
         </div>
@@ -5965,7 +5965,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       sheetClassName={`flex max-h-[50dvh] w-screen flex-col overflow-hidden rounded-t-2xl border-t shadow-2xl ${
         isDark ? 'border-slate-800 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
       }`}
-      bodyClassName="min-h-0 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4"
+      bodyClassName="min-h-0 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+28px)] pt-4"
       onClose={() => setIsEditorInfoPanelOpen(false)}
     >
       {editorInfoPanelContent}
@@ -6544,7 +6544,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       closeLabel="종류 변경 닫기"
       zIndexClassName="z-[232]"
       backdropClassName="bg-slate-950/45"
-      bodyClassName="min-h-0 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4"
+      bodyClassName="min-h-0 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+28px)] pt-4"
       onHeightChange={setMobileModalSheetHeight}
       onClose={() => setMobileQuickEditNodeId(null)}
     >
@@ -6920,7 +6920,11 @@ export const EditorCanvas = memo(function EditorCanvas({
       </div>
       {addMenuPreviewPoint ? (
         <div
-          className="pointer-events-none fixed z-[225] -translate-x-1/2 -translate-y-1/2 select-none text-red-600 drop-shadow-[0_2px_0_rgba(255,255,255,0.95)]"
+          className={`pointer-events-none fixed z-[225] -translate-x-1/2 -translate-y-1/2 select-none drop-shadow-xl ${
+            isDark
+              ? 'text-white [--map-pin-hole:#020617]'
+              : 'text-slate-950 [--map-pin-hole:#ffffff]'
+          }`}
           style={mobileAddMenuPreviewStyle}
           aria-hidden="true"
         >
@@ -6928,7 +6932,7 @@ export const EditorCanvas = memo(function EditorCanvas({
         </div>
       ) : null}
       <MobilePortal>
-        {isMobileInput && !isEditorSettingsOpen ? (
+        {isMobileInput && !isEditorSettingsOpen && !addMenuPreviewPoint ? (
           <div className="fixed bottom-5 right-8 z-[120] flex flex-col items-center gap-2" style={floatingButtonVisualViewportStyle}>
             <MobileFloatingActionButton
               onClick={() => {
