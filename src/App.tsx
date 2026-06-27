@@ -34,6 +34,43 @@ const ROUTE_PATHS: Record<AppRoute, string> = {
   editor: '/editor',
 }
 
+function routeUsesBrowserFullscreen(route: AppRoute) {
+  return route === 'editor' || route === 'simulationFullscreen'
+}
+
+function requestBrowserFullscreen() {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  if (!document.fullscreenEnabled || document.fullscreenElement) {
+    return
+  }
+
+  document.documentElement.requestFullscreen().catch(() => undefined)
+}
+
+function exitBrowserFullscreen() {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  if (!document.fullscreenElement) {
+    return
+  }
+
+  document.exitFullscreen().catch(() => undefined)
+}
+
+function syncBrowserFullscreenForRoute(route: AppRoute) {
+  if (routeUsesBrowserFullscreen(route)) {
+    requestBrowserFullscreen()
+    return
+  }
+
+  exitBrowserFullscreen()
+}
+
 function routeFromPathname(pathname: string): AppRoute {
   const normalizedPath = pathname.replace(/\/+$/, '') || '/'
 
@@ -75,6 +112,7 @@ function App() {
     }
 
     setRoute(nextRoute)
+    syncBrowserFullscreenForRoute(nextRoute)
   }, [])
 
   useEffect(() => {
@@ -88,15 +126,28 @@ function App() {
       if (authSession && nextRoute === 'login') {
         window.history.replaceState({ route: 'simulation' }, '', ROUTE_PATHS.simulation)
         setRoute('simulation')
+        syncBrowserFullscreenForRoute('simulation')
         return
       }
 
       setRoute(nextRoute)
+      syncBrowserFullscreenForRoute(nextRoute)
     }
 
     window.addEventListener('popstate', syncRouteFromHistory)
     return () => window.removeEventListener('popstate', syncRouteFromHistory)
   }, [authSession])
+
+  useEffect(() => {
+    const syncRouteFromBrowserFullscreen = () => {
+      if (!document.fullscreenElement && route === 'simulationFullscreen') {
+        navigate('simulation', { replace: true })
+      }
+    }
+
+    document.addEventListener('fullscreenchange', syncRouteFromBrowserFullscreen)
+    return () => document.removeEventListener('fullscreenchange', syncRouteFromBrowserFullscreen)
+  }, [navigate, route])
 
   useEffect(() => {
     return setAuthFailureHandler(() => {
