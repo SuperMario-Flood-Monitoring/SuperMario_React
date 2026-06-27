@@ -3014,14 +3014,27 @@ export const EditorCanvas = memo(function EditorCanvas({
   useEffect(() => {
     const root = document.documentElement
 
-    const visualViewport = window.visualViewport
-    const height = visualViewport?.height ?? window.innerHeight
-    const offsetTop = visualViewport?.offsetTop ?? 0
-    const bottomInset = Math.max(0, window.innerHeight - height - offsetTop)
+    const updateVisualViewportVars = () => {
+      const visualViewport = window.visualViewport
+      const height = visualViewport?.height ?? window.innerHeight
+      const offsetTop = visualViewport?.offsetTop ?? 0
+      const bottomInset = Math.max(0, window.innerHeight - height - offsetTop)
 
-    root.style.setProperty('--app-visual-height', `${height}px`)
-    root.style.setProperty('--app-visual-offset-top', `${offsetTop}px`)
-    root.style.setProperty('--app-visual-bottom-inset', `${bottomInset}px`)
+      root.style.setProperty('--app-visual-height', `${height}px`)
+      root.style.setProperty('--app-visual-offset-top', `${offsetTop}px`)
+      root.style.setProperty('--app-visual-bottom-inset', `${bottomInset}px`)
+    }
+
+    updateVisualViewportVars()
+    window.addEventListener('resize', updateVisualViewportVars)
+    window.visualViewport?.addEventListener('resize', updateVisualViewportVars)
+    window.visualViewport?.addEventListener('scroll', updateVisualViewportVars)
+
+    return () => {
+      window.removeEventListener('resize', updateVisualViewportVars)
+      window.visualViewport?.removeEventListener('resize', updateVisualViewportVars)
+      window.visualViewport?.removeEventListener('scroll', updateVisualViewportVars)
+    }
   }, [])
   const suppressCoordinateEditFollowUpClickUntilRef = useRef(0)
   const nextNodeIndex = layout.nodes.length + 1
