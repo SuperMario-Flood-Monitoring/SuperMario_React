@@ -1225,7 +1225,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
             </section>
           </div>
         </div>
-        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+12px)] shrink-0" aria-hidden="true" /> : null}
+        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+72px)] shrink-0" aria-hidden="true" /> : null}
       </section>
     </div>
   ) : null
@@ -1264,7 +1264,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
         <div className={`${isMobileInput ? 'min-h-0 pb-4' : 'h-[calc(100vh-80px)] py-4'} overflow-y-auto px-5 pt-4`}>
           {infoPanelContent}
         </div>
-        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+12px)] shrink-0" aria-hidden="true" /> : null}
+        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+72px)] shrink-0" aria-hidden="true" /> : null}
       </section>
     </div>
   ) : null

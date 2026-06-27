@@ -5872,7 +5872,7 @@ export const EditorCanvas = memo(function EditorCanvas({
           {scenarioToolbar}
           {actionToolbar}
         </div>
-        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+12px)] shrink-0" aria-hidden="true" /> : null}
+        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+72px)] shrink-0" aria-hidden="true" /> : null}
       </section>
     </div>
   ) : null

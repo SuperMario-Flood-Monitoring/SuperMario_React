@@ -5618,7 +5618,7 @@ export const EditorCanvas = memo(function EditorCanvas({
           {scenarioToolbar}
           {actionToolbar}
         </div>
-        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+12px)] shrink-0" aria-hidden="true" /> : null}
+        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+72px)] shrink-0" aria-hidden="true" /> : null}
       </section>
     </div>
   ) : null
@@ -5736,7 +5736,7 @@ export const EditorCanvas = memo(function EditorCanvas({
         <div className="max-h-[calc(var(--app-visual-height,100dvh)-112px)] overflow-y-auto px-5 pb-4 pt-4">
           {editorInfoPanelContent}
         </div>
-        <div className="h-[calc(env(safe-area-inset-bottom)+12px)] shrink-0" aria-hidden="true" />
+        <div className="h-[calc(env(safe-area-inset-bottom)+72px)] shrink-0" aria-hidden="true" />
       </section>
     </div>
   ) : null
@@ -5921,7 +5921,7 @@ export const EditorCanvas = memo(function EditorCanvas({
             </div>
           </div>
         </div>
-        <div className="h-[calc(env(safe-area-inset-bottom)+12px)] shrink-0" aria-hidden="true" />
+        <div className="h-[calc(env(safe-area-inset-bottom)+72px)] shrink-0" aria-hidden="true" />
       </section>
     </div>
   ) : null
