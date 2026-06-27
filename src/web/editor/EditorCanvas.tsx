@@ -6109,20 +6109,22 @@ export const EditorCanvas = memo(function EditorCanvas({
   const mobileCanvasScale = isMobileInput ? Math.max(1, editorZoomRatio) : 1
   const renderedEditorViewBox = isMobileInput ? mobileScrollViewBox : editorViewBox
   const mobileEditorLocksScroll = false
+  const editorSystemSurfaceClassName = isDark
+    ? 'border-white bg-white text-slate-950'
+    : 'border-slate-950 bg-slate-950 text-white'
+  const editorSystemDividerClassName = isDark ? 'border-slate-200' : 'border-white/15'
   const editorUndoRedoButtonClassName = isDark
-    ? 'border-white/15 bg-slate-950/88 text-white hover:bg-slate-900 disabled:text-slate-500 disabled:opacity-35'
-    : 'border-slate-200 bg-white/92 text-slate-800 hover:bg-white disabled:text-slate-400 disabled:opacity-45'
+    ? 'hover:bg-slate-100 disabled:text-slate-400 disabled:opacity-45'
+    : 'hover:bg-slate-900 disabled:text-slate-500 disabled:opacity-35'
   const editorUndoRedoControls = (
-    <div className="fixed left-4 top-24 z-[130] inline-flex h-12 overflow-hidden rounded-md border border-white/15 bg-slate-950/88 shadow-xl backdrop-blur lg:top-28">
+    <div className={`fixed left-4 top-24 z-[130] inline-flex h-12 overflow-hidden rounded-md border shadow-xl backdrop-blur lg:top-28 ${editorSystemSurfaceClassName}`}>
       <button
         type="button"
         onClick={undoEditorLayout}
         disabled={!canUndo || isScenarioReadOnly}
         aria-label="되돌리기"
         title="되돌리기"
-        className={`flex h-12 w-12 items-center justify-center border-r transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300 disabled:cursor-not-allowed ${
-          isDark ? 'border-white/10' : 'border-slate-200'
-        } ${editorUndoRedoButtonClassName}`}
+        className={`flex h-12 w-12 items-center justify-center border-r transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300 disabled:cursor-not-allowed ${editorSystemDividerClassName} ${editorUndoRedoButtonClassName}`}
       >
         <UndoIcon className="h-5 w-5" />
       </button>
@@ -6141,6 +6143,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   const editorZoomControls = (
     <WebZoomControls
       className="fixed right-4 top-24 z-[130] lg:top-28"
+      isDark={isDark}
       percentLabel={editorZoomPercentLabel}
       canZoomOut={editorZoomRatio > 1.001}
       canReset={editorZoomRatio > 1.001}

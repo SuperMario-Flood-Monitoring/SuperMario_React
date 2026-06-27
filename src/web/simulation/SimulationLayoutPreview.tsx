@@ -2423,7 +2423,7 @@ export function SimulationLayoutPreview({
     return (
       <div
         ref={fullscreenRootRef}
-        className={`fixed inset-0 z-[90] bg-slate-950 ${
+        className={`fixed inset-0 z-[90] ${isDark ? 'bg-slate-950' : 'bg-white'} ${
           isMobileInput
             ? 'overflow-auto overscroll-contain'
             : 'flex touch-none cursor-grab items-center justify-center overflow-hidden active:cursor-grabbing'
@@ -2493,8 +2493,8 @@ export function SimulationLayoutPreview({
                 title="시뮬레이션 전체화면"
                 className={`absolute right-2 top-2 z-30 flex ${isMobileInput ? 'h-12 w-12' : 'h-[58px] w-[58px] [&>svg]:h-6 [&>svg]:w-6'} items-center justify-center rounded-full border shadow-xl backdrop-blur transition ${
                   isDark
-                    ? 'border-white/20 bg-slate-950/88 text-white hover:bg-slate-900'
-                    : 'border-slate-200 bg-white/92 text-slate-800 hover:bg-slate-50'
+                    ? 'border-white bg-white text-slate-950 hover:bg-slate-100'
+                    : 'border-slate-950 bg-slate-950 text-white hover:bg-slate-900'
                 }`}
               >
                 <FullscreenToggleIcon isFullscreen={isFullscreen} />

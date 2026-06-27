@@ -1297,6 +1297,9 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   const floatingSystemButtonClassName = isDark
     ? 'border-white bg-white text-slate-950 hover:bg-slate-100 focus-visible:ring-white'
     : 'border-slate-950 bg-slate-950 text-white hover:bg-slate-900 focus-visible:ring-slate-500'
+  const fullscreenSystemButtonClassName = isDark
+    ? floatingSystemButtonClassName
+    : 'border-white/25 bg-slate-950/92 text-white ring-1 ring-white/10 hover:bg-slate-900 focus-visible:ring-white'
   const scenarioSettingsFab = !isScenarioSettingsOpen && !isFullscreen ? (
     <button
       type="button"
@@ -1309,8 +1312,8 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
       <GearIcon className="h-4 w-4" />
     </button>
   ) : null
-  const fullscreenMenuButtonClassName = 'flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-slate-950/88 text-white shadow-xl backdrop-blur transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:cursor-wait disabled:opacity-55'
-  const fullscreenSettingsButtonClassName = `flex h-12 w-12 items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 disabled:cursor-wait disabled:opacity-55 ${floatingSystemButtonClassName}`
+  const fullscreenMenuButtonClassName = `flex h-12 w-12 items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 disabled:cursor-wait disabled:opacity-55 ${fullscreenSystemButtonClassName}`
+  const fullscreenSettingsButtonClassName = `flex h-12 w-12 items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 disabled:cursor-wait disabled:opacity-55 ${fullscreenSystemButtonClassName}`
   const fullscreenTopButtonBaseClassName = 'flex h-11 w-11 items-center justify-center rounded-md border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:cursor-wait disabled:opacity-55'
   const fullscreenPlayButtonClassName = `${fullscreenTopButtonBaseClassName} border-emerald-300/60 bg-emerald-600/95 text-white hover:bg-emerald-500`
   const fullscreenPauseButtonClassName = `${fullscreenTopButtonBaseClassName} border-amber-300/60 bg-amber-500/95 text-slate-950 hover:bg-amber-400`
@@ -1363,6 +1366,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     <MobileZoomControls
       ref={fullscreenZoomControlsRef}
       className="fixed right-4 top-4 z-[150]"
+      isDark={isDark}
       percentLabel={`${Math.round(fullscreenZoom * 100)}%`}
       canZoomOut={!isFullscreenZoomMin}
       canReset={!isFullscreenZoomMin}
