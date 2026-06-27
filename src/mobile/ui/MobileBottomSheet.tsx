@@ -41,7 +41,7 @@ export function MobileBottomSheet({
   backdropClassName = 'bg-slate-950/55',
   sheetClassName,
   bodyClassName = 'min-h-0 overflow-y-auto px-5 pb-4 pt-4',
-  bottomSpacerClassName = 'h-[calc(env(safe-area-inset-bottom)+72px)]',
+  bottomSpacerClassName = 'h-[calc(env(safe-area-inset-bottom)+40px)]',
   dataEditorContextMenu = false,
   role = 'dialog',
   ariaModal = true,

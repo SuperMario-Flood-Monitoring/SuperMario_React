@@ -5838,10 +5838,15 @@ export const EditorCanvas = memo(function EditorCanvas({
           ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end'
           : 'inset-0 items-stretch justify-end'
       }`}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          setIsEditorSettingsOpen(false)
+        }
+      }}
     >
       <section
         ref={isMobileInput ? mobileEditorSettingsSheetRef : undefined}
-        className={`${isMobileInput ? 'flex max-h-[50dvh] w-screen flex-col rounded-t-2xl border-t' : 'h-screen w-[460px] max-w-[92vw] border-l'} overflow-hidden shadow-2xl ${
+        className={`${isMobileInput ? 'flex max-h-[calc(var(--app-visual-height,100dvh)-16px)] w-screen flex-col rounded-t-2xl border-t' : 'h-screen w-[460px] max-w-[92vw] border-l'} overflow-hidden shadow-2xl ${
           isDark ? 'border-slate-800 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
         }`}
         role="dialog"
@@ -5868,11 +5873,11 @@ export const EditorCanvas = memo(function EditorCanvas({
             <CloseIcon />
           </button>
         </header>
-        <div className={`${isMobileInput ? 'min-h-0 pb-4' : 'h-[calc(100vh-85px)]'} overflow-y-auto`}>
+        <div className={`${isMobileInput ? 'min-h-0 max-h-[calc(var(--app-visual-height,100dvh)-101px)] pb-4' : 'h-[calc(100vh-85px)]'} overflow-y-auto`}>
           {scenarioToolbar}
           {actionToolbar}
         </div>
-        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+72px)] shrink-0" aria-hidden="true" /> : null}
+        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+40px)] shrink-0" aria-hidden="true" /> : null}
       </section>
     </div>
   ) : null
