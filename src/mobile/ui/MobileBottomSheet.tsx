@@ -19,6 +19,7 @@ interface MobileBottomSheetProps {
   backdropClassName?: string
   sheetClassName?: string
   bodyClassName?: string
+  bottomSpacerClassName?: string
   dataEditorContextMenu?: boolean
   role?: 'dialog'
   ariaModal?: boolean
@@ -39,7 +40,8 @@ export function MobileBottomSheet({
   overlayClassName = 'fixed bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] flex h-[var(--app-visual-height,100dvh)] items-end',
   backdropClassName = 'bg-slate-950/55',
   sheetClassName,
-  bodyClassName = 'min-h-0 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+28px)] pt-4',
+  bodyClassName = 'min-h-0 overflow-y-auto px-5 pb-4 pt-4',
+  bottomSpacerClassName = 'h-[calc(env(safe-area-inset-bottom)+12px)]',
   dataEditorContextMenu = false,
   role = 'dialog',
   ariaModal = true,
@@ -128,6 +130,7 @@ export function MobileBottomSheet({
         <div className={bodyClassName}>
           {children}
         </div>
+        <div className={`shrink-0 ${bottomSpacerClassName}`} aria-hidden="true" />
       </section>
     </div>
     </MobilePortal>

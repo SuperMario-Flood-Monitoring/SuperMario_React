@@ -1,5 +1,4 @@
 import {
-  type CSSProperties,
   type ChangeEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -5615,10 +5614,11 @@ export const EditorCanvas = memo(function EditorCanvas({
             <CloseIcon />
           </button>
         </header>
-        <div className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-101px)] pb-[calc(env(safe-area-inset-bottom)+16px)]' : 'h-[calc(100vh-85px)]'} overflow-y-auto`}>
+        <div className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-101px)] pb-4' : 'h-[calc(100vh-85px)]'} overflow-y-auto`}>
           {scenarioToolbar}
           {actionToolbar}
         </div>
+        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+12px)] shrink-0" aria-hidden="true" /> : null}
       </section>
     </div>
   ) : null
@@ -5733,9 +5733,10 @@ export const EditorCanvas = memo(function EditorCanvas({
             <CloseIcon />
           </button>
         </header>
-        <div className="max-h-[calc(var(--app-visual-height,100dvh)-112px)] overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4">
+        <div className="max-h-[calc(var(--app-visual-height,100dvh)-112px)] overflow-y-auto px-5 pb-4 pt-4">
           {editorInfoPanelContent}
         </div>
+        <div className="h-[calc(env(safe-area-inset-bottom)+12px)] shrink-0" aria-hidden="true" />
       </section>
     </div>
   ) : null
@@ -5804,7 +5805,7 @@ export const EditorCanvas = memo(function EditorCanvas({
             <CloseIcon />
           </button>
         </header>
-        <div className="max-h-[calc(var(--app-visual-height,100dvh)-112px)] overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4">
+        <div className="max-h-[calc(var(--app-visual-height,100dvh)-112px)] overflow-y-auto px-5 pb-4 pt-4">
           <div className={`rounded-xl border p-3 ${isDark ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200 bg-slate-50'}`}>
             <div className="mb-3 flex items-center justify-between gap-3">
               <div className={`min-w-0 truncate text-xs font-black ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -5920,6 +5921,7 @@ export const EditorCanvas = memo(function EditorCanvas({
             </div>
           </div>
         </div>
+        <div className="h-[calc(env(safe-area-inset-bottom)+12px)] shrink-0" aria-hidden="true" />
       </section>
     </div>
   ) : null
@@ -6158,9 +6160,6 @@ export const EditorCanvas = memo(function EditorCanvas({
       onZoomIn={() => setEditorZoom((current) => current + EDITOR_ZOOM_STEP)}
     />
   )
-  const floatingButtonVisualViewportStyle: CSSProperties | undefined = isMobileInput
-    ? { bottom: 'calc(var(--app-visual-bottom-inset, 0px) + env(safe-area-inset-bottom) + 20px)' }
-    : undefined
   const floatingSystemButtonClassName = isDark
     ? 'border-white bg-white text-slate-950 hover:bg-slate-100 focus-visible:ring-white'
     : 'border-slate-950 bg-slate-950 text-white hover:bg-slate-900 focus-visible:ring-slate-500'
@@ -6510,7 +6509,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       ) : null}
       <WebPortal>
         {isMobileInput && !isEditorSettingsOpen ? (
-          <div className="fixed bottom-5 right-8 z-[120] flex flex-col items-center gap-2" style={floatingButtonVisualViewportStyle}>
+          <div className="fixed bottom-5 right-8 z-[120] flex flex-col items-center gap-2">
             <button
               type="button"
               onClick={() => {

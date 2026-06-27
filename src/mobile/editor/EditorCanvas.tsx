@@ -5868,10 +5868,11 @@ export const EditorCanvas = memo(function EditorCanvas({
             <CloseIcon />
           </button>
         </header>
-        <div className={`${isMobileInput ? 'min-h-0 pb-[calc(env(safe-area-inset-bottom)+28px)]' : 'h-[calc(100vh-85px)]'} overflow-y-auto`}>
+        <div className={`${isMobileInput ? 'min-h-0 pb-4' : 'h-[calc(100vh-85px)]'} overflow-y-auto`}>
           {scenarioToolbar}
           {actionToolbar}
         </div>
+        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+12px)] shrink-0" aria-hidden="true" /> : null}
       </section>
     </div>
   ) : null
@@ -5965,7 +5966,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       sheetClassName={`flex max-h-[50dvh] w-screen flex-col overflow-hidden rounded-t-2xl border-t shadow-2xl ${
         isDark ? 'border-slate-800 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
       }`}
-      bodyClassName="min-h-0 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+28px)] pt-4"
+      bodyClassName="min-h-0 overflow-y-auto px-5 pb-4 pt-4"
       onClose={() => setIsEditorInfoPanelOpen(false)}
     >
       {editorInfoPanelContent}
@@ -6419,9 +6420,6 @@ export const EditorCanvas = memo(function EditorCanvas({
       onZoomIn={() => setEditorZoom((current) => current + EDITOR_ZOOM_STEP)}
     />
   )
-  const floatingButtonVisualViewportStyle: CSSProperties | undefined = isMobileInput
-    ? { bottom: 'calc(var(--app-visual-bottom-inset, 0px) + env(safe-area-inset-bottom) + 20px)' }
-    : undefined
   const floatingSystemButtonClassName = isDark
     ? 'border-white bg-white text-slate-950 hover:bg-slate-100 focus-visible:ring-white'
     : 'border-slate-950 bg-slate-950 text-white hover:bg-slate-900 focus-visible:ring-slate-500'
@@ -6544,7 +6542,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       closeLabel="종류 변경 닫기"
       zIndexClassName="z-[232]"
       backdropClassName="bg-slate-950/45"
-      bodyClassName="min-h-0 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+28px)] pt-4"
+      bodyClassName="min-h-0 overflow-y-auto px-5 pb-4 pt-4"
       onHeightChange={setMobileModalSheetHeight}
       onClose={() => setMobileQuickEditNodeId(null)}
     >
@@ -6933,7 +6931,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       ) : null}
       <MobilePortal>
         {isMobileInput && !isEditorSettingsOpen && !addMenuPreviewPoint ? (
-          <div className="fixed bottom-5 right-8 z-[120] flex flex-col items-center gap-2" style={floatingButtonVisualViewportStyle}>
+          <div className="fixed bottom-5 right-8 z-[120] flex flex-col items-center gap-2">
             <MobileFloatingActionButton
               onClick={() => {
                 setContextMenu(null)

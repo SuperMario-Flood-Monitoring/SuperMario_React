@@ -1205,7 +1205,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
           </button>
         </header>
 
-        <div className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-92px)] pb-[calc(env(safe-area-inset-bottom)+16px)]' : 'h-[calc(100vh-76px)] py-4'} overflow-y-auto px-5 pt-4`}>
+        <div className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-92px)] pb-4' : 'h-[calc(100vh-76px)] py-4'} overflow-y-auto px-5 pt-4`}>
           <div className="space-y-5">
             <section>
               <h3 className="text-sm font-black">시나리오</h3>
@@ -1316,6 +1316,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
             </section>
           </div>
         </div>
+        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+12px)] shrink-0" aria-hidden="true" /> : null}
       </section>
     </div>
   ) : null
@@ -1378,9 +1379,10 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
             닫기
           </button>
         </header>
-        <div className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-112px)] pb-[calc(env(safe-area-inset-bottom)+16px)]' : 'h-[calc(100vh-80px)] py-4'} overflow-y-auto px-5 pt-4`}>
+        <div className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-112px)] pb-4' : 'h-[calc(100vh-80px)] py-4'} overflow-y-auto px-5 pt-4`}>
           {infoPanelContent}
         </div>
+        {isMobileInput ? <div className="h-[calc(env(safe-area-inset-bottom)+12px)] shrink-0" aria-hidden="true" /> : null}
       </section>
     </div>
   ) : null
