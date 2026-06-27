@@ -367,9 +367,13 @@ function StatCell({ label, value }: { label: string; value: string | number }) {
 export const SimulationWorkbench = memo(function SimulationWorkbench({
   theme = 'light',
   renderHeader,
+  fullscreenRouteActive = false,
+  onFullscreenRouteChange,
 }: {
   theme?: WorkbenchTheme
   renderHeader?: () => ReactNode
+  fullscreenRouteActive?: boolean
+  onFullscreenRouteChange?: (active: boolean) => void
 }) {
   const isDark = theme === 'dark'
   const themeTokens = WORKBENCH_THEME_TOKENS[theme]
@@ -386,7 +390,8 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   const [speedMultiplier, setSpeedMultiplier] = useState(1)
   const [isScenarioSettingsOpen, setIsScenarioSettingsOpen] = useState(false)
   const [isNodeStatsOpen, setIsNodeStatsOpen] = useState(false)
-  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [internalFullscreen, setInternalFullscreen] = useState(false)
+  const isFullscreen = onFullscreenRouteChange ? fullscreenRouteActive : internalFullscreen
   const [fullscreenZoom, setFullscreenZoom] = useState(FULLSCREEN_ZOOM_MIN)
   const [fullscreenViewResetSignal, setFullscreenViewResetSignal] = useState(0)
   const [isMobileInput, setIsMobileInput] = useState(() => getInitialAppSurface() === 'mobile')
@@ -451,13 +456,21 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     landscapeModeSupport,
     requestLandscape,
   } = useMobileLandscapePreference(isFullscreen)
-  const toggleFullscreen = useCallback(() => {
-    if (!isFullscreen && landscapeModeSupport === 'supported') {
+  const requestFullscreenRoute = useCallback((nextFullscreen: boolean) => {
+    if (nextFullscreen && landscapeModeSupport === 'supported') {
       void requestLandscape()
     }
 
-    setIsFullscreen((current) => !current)
-  }, [isFullscreen, landscapeModeSupport, requestLandscape])
+    if (onFullscreenRouteChange) {
+      onFullscreenRouteChange(nextFullscreen)
+      return
+    }
+
+    setInternalFullscreen(nextFullscreen)
+  }, [landscapeModeSupport, onFullscreenRouteChange, requestLandscape])
+  const toggleFullscreen = useCallback(() => {
+    requestFullscreenRoute(!isFullscreen)
+  }, [isFullscreen, requestFullscreenRoute])
   const handleSelectPreviewNode = useCallback((nodeId: string, targetSwmmId?: string) => {
     previewSelectionClearedRef.current = !targetSwmmId
     setSelectedPreviewNodeId(nodeId)
@@ -1391,7 +1404,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
       </button>
       <button
         type="button"
-        onClick={() => setIsFullscreen(false)}
+        onClick={() => requestFullscreenRoute(false)}
         aria-label="전체화면 종료"
         title="전체화면 종료"
         className={fullscreenMenuButtonClassName}

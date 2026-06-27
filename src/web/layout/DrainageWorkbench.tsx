@@ -16,6 +16,8 @@ export type WorkbenchMode = 'simulation' | 'editor'
 interface DrainageWorkbenchProps {
   mode?: WorkbenchMode
   onModeChange?: (mode: WorkbenchMode) => void
+  simulationFullscreenActive?: boolean
+  onSimulationFullscreenChange?: (active: boolean) => void
   onLogout?: () => void
 }
 
@@ -102,7 +104,13 @@ function NotificationChatModalFallback({ theme, onClose }: { theme: WorkbenchThe
   )
 }
 
-export function DrainageWorkbench({ mode, onModeChange, onLogout }: DrainageWorkbenchProps) {
+export function DrainageWorkbench({
+  mode,
+  onModeChange,
+  simulationFullscreenActive = false,
+  onSimulationFullscreenChange,
+  onLogout,
+}: DrainageWorkbenchProps) {
   const [internalMode, setInternalMode] = useState<WorkbenchMode>('simulation')
   const [theme, setTheme] = useState<WorkbenchTheme>(() => getSystemWorkbenchTheme())
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false)
@@ -255,7 +263,12 @@ export function DrainageWorkbench({ mode, onModeChange, onLogout }: DrainageWork
       {activeMode === 'editor' ? (
         <EditorCanvas theme={theme} renderHeader={renderWorkbenchHeader} />
       ) : (
-        <SimulationWorkbench theme={theme} renderHeader={renderWorkbenchHeader} />
+        <SimulationWorkbench
+          theme={theme}
+          renderHeader={renderWorkbenchHeader}
+          fullscreenRouteActive={simulationFullscreenActive}
+          onFullscreenRouteChange={onSimulationFullscreenChange}
+        />
       )}
       {isNotificationModalOpen ? (
         <Suspense fallback={<NotificationChatModalFallback theme={theme} onClose={() => setIsNotificationModalOpen(false)} />}>
