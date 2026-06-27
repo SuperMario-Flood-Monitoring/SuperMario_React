@@ -1,0 +1,30 @@
+{
+  "name": "수퍼마리오",
+  "short_name": "수퍼마리오",
+  "description": "SWMM 기반 도시 배수 편집 및 실시간 시뮬레이션",
+  "start_url": "/simulation",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone", "browser"],
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/maskable-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
