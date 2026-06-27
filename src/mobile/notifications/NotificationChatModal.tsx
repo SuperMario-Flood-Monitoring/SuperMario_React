@@ -12,6 +12,14 @@ interface NotificationChatModalProps {
   onClose: () => void
 }
 
+const MIN_NOTIFICATION_CHAT_LOADING_MS = 1500
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
+
 function NotificationChatSkeletonList({ isDark }: { isDark: boolean }) {
   return (
     <div className="space-y-3" aria-label="알림 채팅방 목록 로딩 중">
@@ -54,15 +62,27 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
     let isMounted = true
 
     async function loadNotificationChats() {
+      const loadingStartedAt = Date.now()
+
+      async function waitForMinimumLoadingTime() {
+        const remainingMs = MIN_NOTIFICATION_CHAT_LOADING_MS - (Date.now() - loadingStartedAt)
+        if (remainingMs > 0) {
+          await delay(remainingMs)
+        }
+      }
+
       try {
         setIsLoading(true)
         const nextNotificationChats = await listNotificationChats()
+        await waitForMinimumLoadingTime()
 
         if (isMounted) {
           setNotificationChats(nextNotificationChats)
           setError('')
         }
       } catch (loadError) {
+        await waitForMinimumLoadingTime()
+
         if (isMounted) {
           setError(loadError instanceof Error ? loadError.message : '알림 채팅방 목록을 불러오지 못했습니다.')
         }

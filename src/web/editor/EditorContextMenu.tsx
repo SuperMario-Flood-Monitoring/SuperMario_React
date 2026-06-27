@@ -78,6 +78,17 @@ export function EditorContextMenu({
   const roseItemClassName = isDark
     ? 'text-rose-200 hover:bg-rose-500/10'
     : 'text-rose-700 hover:bg-rose-50'
+  const layoutAddToolbarClassName = isDark
+    ? 'border-slate-700 bg-slate-950/96 text-slate-100 shadow-black/40'
+    : 'border-slate-200 bg-white/96 text-slate-900 shadow-slate-900/20'
+  const layoutAddButtonClassName = isDark
+    ? 'border-slate-700 bg-slate-900 text-slate-100 hover:border-blue-400 hover:bg-blue-950'
+    : 'border-slate-200 bg-slate-50 text-slate-800 hover:border-blue-400 hover:bg-blue-50'
+  const layoutAddIcons: Record<LayoutAddKind, string> = {
+    ground: '🟫',
+    river: '🏞️',
+    sea: '🌊',
+  }
   const mobileSheetTitle = contextMenu.baseGround || contextMenu.nodeId
     ? mobileNodeMenuView === 'zOrder'
       ? 'ZIndex 변경'
@@ -294,7 +305,10 @@ export function EditorContextMenu({
             <button
               key={kind}
               type="button"
-              onClick={() => onAddLayoutNode(kind, contextMenu.layoutAdd!)}
+              onClick={() => {
+                onAddLayoutNode(kind, contextMenu.layoutAdd!)
+                onClose()
+              }}
               className={`block w-full px-3 py-2 text-left text-sm font-black ${itemClassName}`}
             >
               {LAYOUT_ADD_KIND_LABELS[kind]} 추가
@@ -384,6 +398,35 @@ export function EditorContextMenu({
           <div className="min-h-0 flex-1 overflow-y-auto">
             {contextMenu.baseGround ? renderMobileBaseGroundMenu() : contextMenu.nodeId ? renderMobileNodeMenu() : menuBodyContent}
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (contextMenu.layoutAdd) {
+    return (
+      <div
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-[230] flex justify-center px-4 pb-7"
+        onContextMenu={(event) => event.preventDefault()}
+      >
+        <div
+          data-editor-context-menu="true"
+          className={`pointer-events-auto grid w-full max-w-md grid-cols-3 gap-2 rounded-2xl border p-2 shadow-2xl backdrop-blur ${layoutAddToolbarClassName}`}
+        >
+          {LAYOUT_ADD_KIND_OPTIONS.map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => {
+                onAddLayoutNode(kind, contextMenu.layoutAdd!)
+                onClose()
+              }}
+              className={`flex min-h-[86px] flex-col items-center justify-center gap-1.5 rounded-xl border px-3 py-3 text-center transition ${layoutAddButtonClassName}`}
+            >
+              <span className="text-2xl leading-none" aria-hidden="true">{layoutAddIcons[kind]}</span>
+              <span className="text-sm font-black">{LAYOUT_ADD_KIND_LABELS[kind]}</span>
+            </button>
+          ))}
         </div>
       </div>
     )

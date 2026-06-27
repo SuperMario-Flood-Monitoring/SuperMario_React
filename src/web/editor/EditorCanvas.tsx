@@ -144,7 +144,14 @@ import {
 } from '../../services/swmm/client'
 import { InfoPanelFrame } from '../layout/InfoPanelLayout'
 import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchTheme'
-import { CloseIcon, GearIcon, RedoIcon, UndoIcon } from '../ui/WebIcons'
+import {
+  CloseIcon,
+  FullscreenEnterIcon,
+  FullscreenExitIcon,
+  GearIcon,
+  RedoIcon,
+  UndoIcon,
+} from '../ui/WebIcons'
 import { WebPortal } from '../ui/WebPortal'
 import { WebZoomControls } from '../ui/WebZoomControls'
 import { MobileBottomSheet } from '../../shared/ui/MobileBottomSheet'
@@ -2962,6 +2969,9 @@ export const EditorCanvas = memo(function EditorCanvas({
   const [isExportingPng, setIsExportingPng] = useState(false)
   const [isEditorInfoPanelOpen, setIsEditorInfoPanelOpen] = useState(false)
   const [isEditorSettingsOpen, setIsEditorSettingsOpen] = useState(false)
+  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(() => (
+    typeof document !== 'undefined' && Boolean(document.fullscreenElement)
+  ))
   const [relationPreviewNodeId, setRelationPreviewNodeId] = useState<string | null>(null)
   const [relationPreviewMode, setRelationPreviewMode] = useState<RelationPreviewMode>('parent')
   const [relationPreviewZoom, setRelationPreviewZoom] = useState(RELATION_PREVIEW_ZOOM_DEFAULT)
@@ -2990,7 +3000,6 @@ export const EditorCanvas = memo(function EditorCanvas({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const editorCanvasViewportRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
-  const dismissedEditorInfoNodeIdRef = useRef<string | null>(null)
   const longPressTimerRef = useRef<number | null>(null)
   const mobileNodeMoveRef = useRef<{
     pointerId: number
@@ -3062,6 +3071,34 @@ export const EditorCanvas = memo(function EditorCanvas({
       editorToastTimerRef.current = null
     }, 2200)
   }, [])
+  const toggleBrowserFullscreen = useCallback(() => {
+    if (!document.fullscreenEnabled) {
+      showEditorToast('이 브라우저에서는 전체화면을 사용할 수 없습니다.')
+      return
+    }
+
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {
+        showEditorToast('전체화면 해제에 실패했습니다.')
+      })
+      return
+    }
+
+    document.documentElement.requestFullscreen().catch(() => {
+      showEditorToast('전체화면 전환에 실패했습니다.')
+    })
+  }, [showEditorToast])
+
+  useEffect(() => {
+    const syncBrowserFullscreen = () => {
+      setIsBrowserFullscreen(Boolean(document.fullscreenElement))
+    }
+
+    syncBrowserFullscreen()
+    document.addEventListener('fullscreenchange', syncBrowserFullscreen)
+    return () => document.removeEventListener('fullscreenchange', syncBrowserFullscreen)
+  }, [])
+
   const blockReadOnlyScenarioAction = useCallback(() => {
     if (!isScenarioReadOnlyRef.current) {
       return false
@@ -4160,7 +4197,9 @@ export const EditorCanvas = memo(function EditorCanvas({
 
     clearLongPressTimer()
     setSelection(null)
-    setIsEditorInfoPanelOpen(false)
+    if (isMobileInput) {
+      setIsEditorInfoPanelOpen(false)
+    }
     setPendingPort(null)
     setAttachTargetNodeId(null)
     setCoordinateEditState(null)
@@ -4179,7 +4218,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       y: clientY,
       point,
     })
-  }, [blockReadOnlyScenarioAction, clearLongPressTimer])
+  }, [blockReadOnlyScenarioAction, clearLongPressTimer, isMobileInput])
 
   const openMobileBaseGroundActionMenu = useCallback((
     point: Point,
@@ -4353,7 +4392,9 @@ export const EditorCanvas = memo(function EditorCanvas({
     }
 
     setSelection(null)
-    setIsEditorInfoPanelOpen(false)
+    if (isMobileInput) {
+      setIsEditorInfoPanelOpen(false)
+    }
     setMobileMoveArmedNodeId(null)
     setPendingPort(null)
     setAttachTargetNodeId(null)
@@ -5030,11 +5071,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       if (!svg.hasPointerCapture(event.pointerId)) {
         svg.setPointerCapture(event.pointerId)
       }
-      const shouldKeepEditorInfoClosed = !isEditorInfoPanelOpen && dismissedEditorInfoNodeIdRef.current === node.id
-      if (!shouldKeepEditorInfoClosed) {
-        dismissedEditorInfoNodeIdRef.current = null
-        setIsEditorInfoPanelOpen(true)
-      }
+      setIsEditorInfoPanelOpen(true)
     }
 
     if (coordinateEditState) {
@@ -6359,34 +6396,38 @@ export const EditorCanvas = memo(function EditorCanvas({
     : 'border-slate-950 bg-slate-950 text-white hover:bg-slate-900 focus-visible:ring-slate-500'
   const floatingBlueButtonClassName = 'border-blue-300 bg-blue-600 text-white hover:bg-blue-500 focus-visible:ring-blue-300'
   const webFloatingButtonSizeClassName = 'h-[58px] w-[58px]'
-  const desktopEditorSettingsFab = !isMobileInput && !isEditorSettingsOpen ? (
-    <button
-      type="button"
-      onClick={() => setIsEditorSettingsOpen(true)}
-      aria-label="편집 세팅"
-      title="편집 세팅"
-      className={`fixed bottom-5 right-8 z-[140] flex ${webFloatingButtonSizeClassName} items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${floatingSystemButtonClassName}`}
-    >
-      <GearIcon className="h-6 w-6" />
-    </button>
+  const desktopEditorFloatingActions = !isMobileInput && !isEditorSettingsOpen ? (
+    <div className="fixed bottom-5 right-8 z-[140] flex flex-col items-center gap-2">
+      <button
+        type="button"
+        onClick={toggleBrowserFullscreen}
+        aria-label={isBrowserFullscreen ? '전체화면 해제' : '전체화면'}
+        title={isBrowserFullscreen ? '전체화면 해제' : '전체화면'}
+        className={`flex ${webFloatingButtonSizeClassName} items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${floatingSystemButtonClassName}`}
+      >
+        {isBrowserFullscreen ? <FullscreenExitIcon className="h-6 w-6" /> : <FullscreenEnterIcon className="h-6 w-6" />}
+      </button>
+      <button
+        type="button"
+        onClick={() => setIsEditorSettingsOpen(true)}
+        aria-label="편집 세팅"
+        title="편집 세팅"
+        className={`flex ${webFloatingButtonSizeClassName} items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${floatingSystemButtonClassName}`}
+      >
+        <GearIcon className="h-6 w-6" />
+      </button>
+    </div>
   ) : null
   const desktopEditorInfoDrawer = !isMobileInput ? (
     <div
-      className={`fixed inset-0 z-[220] flex items-stretch justify-start transition-[opacity] duration-200 ${
+      className={`pointer-events-none fixed bottom-0 left-0 top-0 z-[220] flex items-stretch justify-start transition-[opacity] duration-200 ${
         isEditorInfoPanelOpen
           ? 'opacity-100'
           : 'pointer-events-none opacity-0'
       }`}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          dismissedEditorInfoNodeIdRef.current = selection?.kind === 'node' ? selection.id : null
-          setIsEditorInfoPanelOpen(false)
-        }
-      }}
-      onWheel={forwardBackgroundWheelToElementBelow}
     >
       <div
-        className={`transition-transform duration-200 ${
+        className={`pointer-events-auto transition-transform duration-200 ${
           isEditorInfoPanelOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         onClick={(event) => event.stopPropagation()}
@@ -6474,7 +6515,7 @@ export const EditorCanvas = memo(function EditorCanvas({
         <WebPortal>
           {editorUndoRedoControls}
           {editorZoomControls}
-          {desktopEditorSettingsFab}
+          {desktopEditorFloatingActions}
           {desktopEditorInfoDrawer}
         </WebPortal>
 

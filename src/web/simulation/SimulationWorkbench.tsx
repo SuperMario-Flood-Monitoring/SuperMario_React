@@ -454,8 +454,6 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   const autoApplyTimerRef = useRef<number | null>(null)
   const layoutFileInputRef = useRef<HTMLInputElement | null>(null)
   const previewSelectionClearedRef = useRef(false)
-  const dismissedRuntimeInfoNodeIdRef = useRef<string | null>(null)
-  const suppressedRuntimeInfoBlockageIdRef = useRef<string | null>(null)
   const runtimeSheetDragStartYRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -534,46 +532,23 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     return () => window.removeEventListener('keydown', handleEscapeFullscreen)
   }, [isFullscreen, isMobileInput, requestFullscreenRoute])
   const handleSelectPreviewNode = useCallback((nodeId: string, targetSwmmId?: string) => {
-    const shouldKeepRuntimeInfoClosed = !isInfoPanelOpen && dismissedRuntimeInfoNodeIdRef.current === nodeId
     previewSelectionClearedRef.current = !targetSwmmId
     setSelectedPreviewNodeId(nodeId)
     if (!targetSwmmId) {
       setSelectedBlockageId('')
     }
-    if (shouldKeepRuntimeInfoClosed) {
-      suppressedRuntimeInfoBlockageIdRef.current = targetSwmmId ?? null
-      return
-    }
-
-    dismissedRuntimeInfoNodeIdRef.current = null
-    suppressedRuntimeInfoBlockageIdRef.current = null
     setIsInfoPanelOpen(true)
-  }, [isInfoPanelOpen])
+  }, [])
   const handleSelectBlockageTarget = useCallback((swmmLinkId: string) => {
     previewSelectionClearedRef.current = false
     setSelectedBlockageId(swmmLinkId)
-    if (suppressedRuntimeInfoBlockageIdRef.current === swmmLinkId) {
-      suppressedRuntimeInfoBlockageIdRef.current = null
-      return
-    }
-
-    dismissedRuntimeInfoNodeIdRef.current = null
-    suppressedRuntimeInfoBlockageIdRef.current = null
     setIsInfoPanelOpen(true)
   }, [])
   const handleClearPreviewSelection = useCallback(() => {
     previewSelectionClearedRef.current = true
-    dismissedRuntimeInfoNodeIdRef.current = null
-    suppressedRuntimeInfoBlockageIdRef.current = null
     setSelectedPreviewNodeId('')
     setSelectedBlockageId('')
-    setIsInfoPanelOpen(false)
   }, [])
-  const dismissRuntimeInfoFromBackdrop = useCallback(() => {
-    dismissedRuntimeInfoNodeIdRef.current = selectedPreviewNodeId || null
-    suppressedRuntimeInfoBlockageIdRef.current = null
-    setIsInfoPanelOpen(false)
-  }, [selectedPreviewNodeId])
   const selectedPreviewTarget = selectedPreviewNode
     ? blockageTargets.find((target) => target.sourceEditorId === selectedPreviewNode.id) ?? null
     : null
@@ -1033,7 +1008,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     })
   }
 
-  const shouldRenderRuntimeInfo = isInfoPanelOpen && Boolean(selectedPreviewNode)
+  const shouldRenderRuntimeInfo = isInfoPanelOpen
   const selectedObjectInfoPanel = shouldRenderRuntimeInfo ? (
     <div>
       <h3 className="text-sm font-black">선택 객체 정보</h3>
@@ -1325,20 +1300,14 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
       className={`fixed z-[220] flex ${
         isMobileInput
           ? 'bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] h-[var(--app-visual-height,100dvh)] items-end justify-center bg-slate-950/45'
-          : 'inset-0 items-stretch justify-start'
+          : 'pointer-events-none bottom-0 left-0 top-0 items-stretch justify-start'
       }`}
       role="dialog"
-      aria-modal="true"
+      aria-modal={isMobileInput ? 'true' : undefined}
       aria-labelledby="runtime-info-sheet-title"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          dismissRuntimeInfoFromBackdrop()
-        }
-      }}
-      onWheel={isMobileInput ? undefined : forwardBackgroundWheelToElementBelow}
     >
       <section
-        className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-16px)] w-screen rounded-t-2xl border-x-0 border-b-0 border-t' : 'h-screen w-[430px] max-w-[92vw] border-r'} overflow-hidden shadow-2xl ${
+        className={`pointer-events-auto ${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-16px)] w-screen rounded-t-2xl border-x-0 border-b-0 border-t' : 'h-screen w-[430px] max-w-[92vw] border-r'} overflow-hidden shadow-2xl ${
           isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-950'
         }`}
         onClick={(event) => event.stopPropagation()}
@@ -1376,7 +1345,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
             onClick={() => setIsInfoPanelOpen(false)}
             className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
           >
-            닫기
+            접기
           </button>
         </header>
         <div className={`${isMobileInput ? 'max-h-[calc(var(--app-visual-height,100dvh)-112px)] pb-4' : 'h-[calc(100vh-80px)] py-4'} overflow-y-auto px-5 pt-4`}>

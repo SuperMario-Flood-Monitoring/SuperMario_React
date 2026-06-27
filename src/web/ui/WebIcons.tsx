@@ -20,6 +20,46 @@ export function GearIcon({ className = 'h-5 w-5' }: WebIconProps) {
   )
 }
 
+export function FullscreenEnterIcon({ className = 'h-5 w-5' }: WebIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M8 3H4a1 1 0 0 0-1 1v4" />
+      <path d="M16 3h4a1 1 0 0 1 1 1v4" />
+      <path d="M8 21H4a1 1 0 0 1-1-1v-4" />
+      <path d="M16 21h4a1 1 0 0 0 1-1v-4" />
+    </svg>
+  )
+}
+
+export function FullscreenExitIcon({ className = 'h-5 w-5' }: WebIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M8 3v4a1 1 0 0 1-1 1H3" />
+      <path d="M16 3v4a1 1 0 0 0 1 1h4" />
+      <path d="M8 21v-4a1 1 0 0 0-1-1H3" />
+      <path d="M16 21v-4a1 1 0 0 1 1-1h4" />
+    </svg>
+  )
+}
+
 export function MenuIcon({ className = 'h-5 w-5' }: WebIconProps) {
   return (
     <svg

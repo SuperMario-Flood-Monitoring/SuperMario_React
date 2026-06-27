@@ -214,7 +214,9 @@ export function DrainageWorkbench({
   const renderWorkbenchHeader = useCallback((infoPanelControls?: InfoPanelControls) => (
     <>
       <header className={`hidden min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-4 lg:flex ${themeTokens.header}`}>
-        <div className="flex min-w-0 items-start gap-3">
+        <div className={`flex min-w-0 items-start gap-3 transition-[padding] duration-200 ${
+          infoPanelControls?.isInfoPanelOpen ? 'lg:pl-[430px]' : ''
+        }`}>
           {infoPanelControls && !infoPanelControls.isInfoPanelOpen ? (
             <InfoPanelToggleButton
               theme={theme}
