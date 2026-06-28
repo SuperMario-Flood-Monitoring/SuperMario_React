@@ -446,9 +446,15 @@ function TerrainNode({ node, selected }: { node: EditorNode; selected: boolean }
   const columns = Math.ceil(node.width / 260)
   const rows = Math.ceil(node.height / 44)
   const showLabel = node.width >= 160 && node.height >= 100
+  const clipPathId = `terrain-clip-${node.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`
 
   return (
     <>
+      <defs>
+        <clipPath id={clipPathId}>
+          <rect x="0" y="0" width={node.width} height={node.height} />
+        </clipPath>
+      </defs>
       <rect
         x="0"
         y="0"
@@ -458,26 +464,28 @@ function TerrainNode({ node, selected }: { node: EditorNode; selected: boolean }
         stroke={selected ? '#f97316' : definition.stroke}
         strokeWidth={selected ? 5 : 3}
       />
-      {Array.from({ length: columns * rows }, (_, index) => {
-        const column = index % columns
-        const row = Math.floor(index / columns)
-        const start = column * 260
-        const baseY = 22 + row * 44
+      <g clipPath={`url(#${clipPathId})`}>
+        {Array.from({ length: columns * rows }, (_, index) => {
+          const column = index % columns
+          const row = Math.floor(index / columns)
+          const start = column * 260
+          const baseY = 22 + row * 44
 
-        return (
-          <path
-            key={index}
-            d={`M${start} ${baseY} C${start + 36} ${baseY - 14} ${
-              start + 76
-            } ${baseY + 14} ${start + 116} ${baseY} S${
-              start + 204
-            } ${baseY - 14} ${start + 260} ${baseY}`}
-            fill="none"
-            stroke={definition.waveStroke}
-            strokeWidth="3"
-          />
-        )
-      })}
+          return (
+            <path
+              key={index}
+              d={`M${start} ${baseY} C${start + 36} ${baseY - 14} ${
+                start + 76
+              } ${baseY + 14} ${start + 116} ${baseY} S${
+                start + 204
+              } ${baseY - 14} ${start + 260} ${baseY}`}
+              fill="none"
+              stroke={definition.waveStroke}
+              strokeWidth="3"
+            />
+          )
+        })}
+      </g>
       {showLabel ? (
         <text
           x={node.width / 2}

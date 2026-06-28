@@ -102,6 +102,7 @@ export function SelectionPanel({
     const fixedY = FIXED_NODE_Y_BY_TYPE[node.type]
     const isYLocked = isSurfaceNode || fixedY !== undefined
     const isPositionLockedPipe = node.type === 'pipeSegment' && connectedLinks.length > 0
+    const isTerrainPositionLocked = node.type === 'terrain'
     const hasPipeSize = (
       node.type === 'pipeSegment' ||
       node.type === 'connector' ||
@@ -209,14 +210,14 @@ export function SelectionPanel({
             theme={theme}
             label="x"
             value={node.x}
-            disabled={isPositionLockedPipe}
+            disabled={isPositionLockedPipe || isTerrainPositionLocked}
             onChange={(value) => onUpdateNode(node.id, { x: value })}
           />
           <NumberField
             theme={theme}
             label="y"
             value={node.y}
-            disabled={isYLocked || isPositionLockedPipe}
+            disabled={isYLocked || isPositionLockedPipe || isTerrainPositionLocked}
             onChange={(value) => onUpdateNode(node.id, { y: value })}
           />
           <NumberField
@@ -250,6 +251,12 @@ export function SelectionPanel({
         {isPositionLockedPipe && (
           <p className={`mt-2 rounded-md px-2 py-2 text-xs font-bold leading-5 ${orangeNoticeClassName}`}>
             관계에 연결된 파이프는 캔버스에서 그룹 단위로 이동합니다. 숫자 위치 편집은 잠겨 있고 길이는 가로/세로 값으로 조정하세요.
+          </p>
+        )}
+
+        {isTerrainPositionLocked && (
+          <p className={`mt-2 rounded-md px-2 py-2 text-xs font-bold leading-5 ${orangeNoticeClassName}`}>
+            레이아웃은 위치를 직접 조정할 수 없고, 크기만 변경할 수 있습니다.
           </p>
         )}
 

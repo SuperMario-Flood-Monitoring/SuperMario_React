@@ -1517,10 +1517,61 @@ function moveNodeIdsBy(layout: EditorLayout, nodeIds: string[], dx: number, dy: 
   return {
     ...layout,
     nodes: layout.nodes.map((node) => (
-      movingNodeIds.has(node.id)
+      movingNodeIds.has(node.id) && node.type !== 'terrain'
         ? snapNodeToGround({ ...node, x: node.x + dx, y: node.y + dy }, layout.groundSurfaceY)
         : node
     )),
+  }
+}
+
+function rangesOverlap(firstStart: number, firstEnd: number, secondStart: number, secondEnd: number) {
+  return Math.min(firstEnd, secondEnd) - Math.max(firstStart, secondStart) > 1
+}
+
+function applyTerrainResizeChain(layout: EditorLayout, originNode: EditorNode, resizedNode: EditorNode): EditorLayout {
+  if (originNode.type !== 'terrain' || resizedNode.type !== 'terrain') {
+    return {
+      ...layout,
+      nodes: layout.nodes.map((node) => (node.id === resizedNode.id ? resizedNode : node)),
+    }
+  }
+
+  const originRight = originNode.x + originNode.width
+  const originBottom = originNode.y + originNode.height
+  const resizedRight = resizedNode.x + resizedNode.width
+  const resizedBottom = resizedNode.y + resizedNode.height
+  const leftDelta = resizedNode.x - originNode.x
+  const rightDelta = resizedRight - originRight
+  const bottomDelta = resizedBottom - originBottom
+
+  return {
+    ...layout,
+    nodes: layout.nodes.map((node) => {
+      if (node.id === resizedNode.id) {
+        return resizedNode
+      }
+
+      if (node.type !== 'terrain') {
+        return node
+      }
+
+      const verticallyOverlaps = rangesOverlap(originNode.y, originBottom, node.y, node.y + node.height)
+      const horizontallyOverlaps = rangesOverlap(originNode.x, originRight, node.x, node.x + node.width)
+
+      if (rightDelta !== 0 && verticallyOverlaps && node.x >= originRight - 1) {
+        return { ...node, x: node.x + rightDelta }
+      }
+
+      if (leftDelta !== 0 && verticallyOverlaps && node.x + node.width <= originNode.x + 1) {
+        return { ...node, x: node.x + leftDelta }
+      }
+
+      if (bottomDelta !== 0 && horizontallyOverlaps && node.y >= originBottom - 1) {
+        return { ...node, y: node.y + bottomDelta }
+      }
+
+      return node
+    }),
   }
 }
 
@@ -1619,6 +1670,10 @@ function createDragDraftPositions(layout: EditorLayout, dragState: DragState, x:
       return
     }
 
+    if (node.type === 'terrain') {
+      return
+    }
+
     const originNode = dragState.originNodes[node.id]
     if (!originNode) {
       return
@@ -1650,7 +1705,7 @@ function applyDragDraftPositions(layout: EditorLayout, draftPositions: Map<strin
     ...layout,
     nodes: layout.nodes.map((node) => {
       const draftPosition = draftPositions.get(node.id)
-      return draftPosition
+      return draftPosition && node.type !== 'terrain'
         ? {
             ...node,
             x: draftPosition.x,
@@ -2269,6 +2324,10 @@ function resizeLayoutFromState(layout: EditorLayout, resizeState: ResizeState, c
       normalizeNodePorts(childDirectedNode),
       layout.groundSurfaceY,
     )
+
+    if (resizeState.originNode.type === 'terrain') {
+      return applyTerrainResizeChain(layout, resizeState.originNode, nextNode)
+    }
 
     return resizeState.originNode.type === 'manhole'
       ? applyConnectedPortResizeToLayout(layout, currentNode, nextNode)
@@ -3701,7 +3760,13 @@ export const EditorCanvas = memo(function EditorCanvas({
     )
     const focusTargetNode = currentNodeForFocus && shouldFocusAfterUpdate
       ? snapNodeToGround(
-        normalizeNodePorts({ ...currentNodeForFocus, ...updates }),
+        normalizeNodePorts({
+          ...currentNodeForFocus,
+          ...updates,
+          ...(currentNodeForFocus.type === 'terrain'
+            ? { x: currentNodeForFocus.x, y: currentNodeForFocus.y }
+            : {}),
+        }),
         layout.groundSurfaceY,
       )
       : null
@@ -3713,9 +3778,19 @@ export const EditorCanvas = memo(function EditorCanvas({
       }
 
       const nextNode = snapNodeToGround(
-        normalizeNodePorts({ ...currentNode, ...updates }),
+        normalizeNodePorts({
+          ...currentNode,
+          ...updates,
+          ...(currentNode.type === 'terrain'
+            ? { x: currentNode.x, y: currentNode.y }
+            : {}),
+        }),
         currentLayout.groundSurfaceY,
       )
+
+      if (currentNode.type === 'terrain') {
+        return applyTerrainResizeChain(currentLayout, currentNode, nextNode)
+      }
 
       if (currentNode.type === 'pipeSegment') {
         const isHorizontal = getNodeOrientation(currentNode) === 'horizontal'
@@ -4996,6 +5071,21 @@ export const EditorCanvas = memo(function EditorCanvas({
     }
 
     const cursor = getSvgCursor(svg, event.clientX, event.clientY)
+    if (node.type === 'terrain') {
+      event.preventDefault()
+      setSelection({ kind: 'node', id: node.id })
+      setPendingPort(null)
+      setAttachTargetNodeId(null)
+      setDragState(null)
+      setDragDraftPositionsByNodeId(null)
+      setResizeState(null)
+      setResizeDraftNodesById(null)
+      if (event.pointerType === 'mouse' && !isMobileInput) {
+        setIsEditorInfoPanelOpen(true)
+      }
+      return
+    }
+
     if (event.pointerType === 'touch' || event.pointerType === 'pen') {
       setIsEditorInfoPanelOpen(false)
 
@@ -6836,7 +6926,8 @@ export const EditorCanvas = memo(function EditorCanvas({
         }}
         onDetachNodeParentRelation={detachContextNodeParentRelations}
         onStartNodeMove={() => {
-          if (contextMenu.nodeId) {
+          const contextNode = contextMenu.nodeId ? nodesById.get(contextMenu.nodeId) : null
+          if (contextMenu.nodeId && contextNode?.type !== 'terrain') {
             setRelationPreviewNodeId(null)
             setSelection({ kind: 'node', id: contextMenu.nodeId })
             mobileMoveArmedNodeIdRef.current = contextMenu.nodeId

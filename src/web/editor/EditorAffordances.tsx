@@ -1,6 +1,5 @@
 import { type PointerEvent as ReactPointerEvent } from 'react'
-import { LAYOUT_ADD_HANDLE_SIZE, RESIZE_BORDER_HIT_SIZE } from './editorDefinitions'
-import { clampNumber } from './editorGeometry'
+import { RESIZE_BORDER_HIT_SIZE } from './editorDefinitions'
 import { getNodeOrientation } from './editorNodeHelpers'
 import { getManualResizableEdges } from './editorNodeRenderData'
 import type { LayoutAddSide, RectBounds, ResizeEdge } from './editorInternalTypes'
@@ -14,66 +13,54 @@ export function LayoutAddHandles({
   bounds: RectBounds
   onPointerDown: (side: LayoutAddSide, event: ReactPointerEvent<SVGGElement>) => void
 }) {
-  const size = LAYOUT_ADD_HANDLE_SIZE
-  const radius = size / 2 - 2
-  const inset = 12
-  const edgeHitSize = 72
-  const guideStroke = 'rgba(15, 23, 42, 0.5)'
-  const width = Math.max(1, bounds.right - bounds.left)
-  const height = Math.max(1, bounds.bottom - bounds.top)
+  const width = Math.max(0, bounds.right - bounds.left)
+  const height = Math.max(0, bounds.bottom - bounds.top)
+
+  if (width < 120 || height < 120) {
+    return null
+  }
+
+  const stripSize = Math.min(88, Math.max(56, Math.min(width, height) * 0.18))
   const centerX = bounds.left + width / 2
   const centerY = bounds.top + height / 2
   const handles: Array<{
     side: LayoutAddSide
     x: number
     y: number
-    hitX: number
-    hitY: number
     hitWidth: number
     hitHeight: number
-    lineX1: number
-    lineY1: number
-    lineX2: number
-    lineY2: number
+    labelX: number
+    labelY: number
+    rotate?: number
   }> = [
     {
       side: 'left',
-      x: bounds.left + inset,
-      y: clampNumber(centerY - size / 2, bounds.top + inset, bounds.bottom - size - inset),
-      hitX: bounds.left,
-      hitY: bounds.top,
-      hitWidth: Math.min(edgeHitSize, width),
+      x: bounds.left,
+      y: bounds.top,
+      hitWidth: stripSize,
       hitHeight: height,
-      lineX1: bounds.left + inset,
-      lineY1: bounds.top + inset,
-      lineX2: bounds.left + inset,
-      lineY2: bounds.bottom - inset,
+      labelX: bounds.left + stripSize / 2,
+      labelY: centerY,
+      rotate: -90,
     },
     {
       side: 'right',
-      x: bounds.right - size - inset,
-      y: clampNumber(centerY - size / 2, bounds.top + inset, bounds.bottom - size - inset),
-      hitX: bounds.right - Math.min(edgeHitSize, width),
-      hitY: bounds.top,
-      hitWidth: Math.min(edgeHitSize, width),
+      x: bounds.right - stripSize,
+      y: bounds.top,
+      hitWidth: stripSize,
       hitHeight: height,
-      lineX1: bounds.right - inset,
-      lineY1: bounds.top + inset,
-      lineX2: bounds.right - inset,
-      lineY2: bounds.bottom - inset,
+      labelX: bounds.right - stripSize / 2,
+      labelY: centerY,
+      rotate: 90,
     },
     {
       side: 'bottom',
-      x: clampNumber(centerX - size / 2, bounds.left + inset, bounds.right - size - inset),
-      y: bounds.bottom - size - inset,
-      hitX: bounds.left,
-      hitY: bounds.bottom - Math.min(edgeHitSize, height),
+      x: bounds.left,
+      y: bounds.bottom - stripSize,
       hitWidth: width,
-      hitHeight: Math.min(edgeHitSize, height),
-      lineX1: bounds.left + inset,
-      lineY1: bounds.bottom - inset,
-      lineX2: bounds.right - inset,
-      lineY2: bounds.bottom - inset,
+      hitHeight: stripSize,
+      labelX: centerX,
+      labelY: bounds.bottom - stripSize / 2,
     },
   ]
 
@@ -86,44 +73,28 @@ export function LayoutAddHandles({
           onPointerDown={(event) => onPointerDown(handle.side, event)}
         >
           <rect
-            x={handle.hitX}
-            y={handle.hitY}
+            x={handle.x}
+            y={handle.y}
             width={handle.hitWidth}
             height={handle.hitHeight}
-            fill="transparent"
-            pointerEvents="all"
-          />
-          <line
-            x1={handle.lineX1}
-            y1={handle.lineY1}
-            x2={handle.lineX2}
-            y2={handle.lineY2}
-            stroke={guideStroke}
-            strokeWidth="4"
-            strokeLinecap="round"
-            className="opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-            pointerEvents="none"
-          />
-          <circle
-            cx={handle.x + size / 2}
-            cy={handle.y + size / 2}
-            r={radius}
-            fill="rgba(248, 250, 252, 0.92)"
-            stroke={guideStroke}
+            rx="14"
+            fill="rgba(15, 23, 42, 0.72)"
+            stroke="rgba(248, 250, 252, 0.92)"
             strokeWidth="2.5"
-            className="opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-            pointerEvents="none"
+            pointerEvents="all"
+            className="opacity-85 transition-opacity duration-150 group-hover:opacity-100"
           />
           <text
-            x={handle.x + size / 2}
-            y={handle.y + size / 2 + 1}
+            x={handle.labelX}
+            y={handle.labelY}
             textAnchor="middle"
             dominantBaseline="central"
-            className="select-none text-[20px] font-black opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-            fill="rgba(15, 23, 42, 0.76)"
+            transform={handle.rotate ? `rotate(${handle.rotate} ${handle.labelX} ${handle.labelY})` : undefined}
+            className="select-none text-[22px] font-black"
+            fill="white"
             pointerEvents="none"
           >
-            +
+            레이아웃 +
           </text>
         </g>
       ))}
