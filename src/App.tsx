@@ -25,13 +25,14 @@ const WebLoginPage = lazy(() => import('./web/auth/LoginPage').then((module) => 
   default: module.LoginPage,
 })))
 
-type WorkbenchMode = 'simulation' | 'editor'
+type WorkbenchMode = 'simulation' | 'editor' | 'logs'
 type AppRoute = 'login' | WorkbenchMode | 'simulationFullscreen'
 const ROUTE_PATHS: Record<AppRoute, string> = {
   login: '/login',
   simulation: '/simulation',
   simulationFullscreen: '/simulation/fullscreen',
   editor: '/editor',
+  logs: '/logs',
 }
 
 function routeUsesBrowserFullscreen(route: AppRoute) {
@@ -76,6 +77,10 @@ function routeFromPathname(pathname: string): AppRoute {
 
   if (normalizedPath === ROUTE_PATHS.editor) {
     return 'editor'
+  }
+
+  if (normalizedPath === ROUTE_PATHS.logs) {
+    return 'logs'
   }
 
   if (normalizedPath === ROUTE_PATHS.simulation) {
@@ -188,7 +193,7 @@ function App() {
   return (
     <Suspense fallback={null}>
       <DrainageWorkbench
-        mode={route === 'editor' ? 'editor' : 'simulation'}
+        mode={route === 'editor' || route === 'logs' ? route : 'simulation'}
         onModeChange={(nextMode) => navigate(nextMode)}
         simulationFullscreenActive={route === 'simulationFullscreen'}
         onSimulationFullscreenChange={(active) => navigate(
