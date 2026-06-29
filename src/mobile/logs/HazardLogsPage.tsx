@@ -36,6 +36,13 @@ const DEFAULT_STATUS_FILTER: StatusFilterState = {
 }
 
 const STATUS_FILTER_OPTIONS: HazardLogRecord['status'][] = ['OPEN', 'IN_PROGRESS', 'RESOLVED']
+const MIN_HAZARD_LOG_INITIAL_LOADING_MS = 1500
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) {
@@ -93,6 +100,59 @@ function getLogDisplayContent(log: HazardLogRecord) {
   }
 
   return formatHazardDetail(log.hazardDetail)
+}
+
+function LoadingSpinner({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <span
+      className={`inline-block animate-spin rounded-full border-2 border-current border-r-transparent ${className}`}
+      aria-hidden="true"
+    />
+  )
+}
+
+function HazardLogSkeletonCards({ isDark }: { isDark: boolean }) {
+  return (
+    <div className="space-y-3" aria-label="위험 로그 목록 로딩 중">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div
+          key={index}
+          className={`rounded-lg border p-4 shadow-sm ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white'}`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className={`h-7 w-16 animate-pulse rounded-full ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+            <div className={`h-4 w-14 animate-pulse rounded ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+          </div>
+          <div className={`mt-4 h-4 w-full animate-pulse rounded ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+          <div className={`mt-2 h-4 w-4/5 animate-pulse rounded ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+          <div className="mt-4 flex gap-2">
+            <div className={`h-3 w-24 animate-pulse rounded ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+            <div className={`h-3 w-16 animate-pulse rounded ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function HazardLogRefreshSkeleton({ isDark }: { isDark: boolean }) {
+  return (
+    <div className="flex shrink-0 items-center gap-2" aria-label="위험 로그 새로고침 영역 로딩 중">
+      <div className={`h-9 w-20 animate-pulse rounded-md border ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-100'}`} />
+      <div className={`h-9 w-16 animate-pulse rounded-md border ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-100'}`} />
+    </div>
+  )
+}
+
+function HazardLogNoticeSkeleton({ isDark }: { isDark: boolean }) {
+  return (
+    <div
+      className={`mt-3 rounded-md border px-3 py-2 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}
+      aria-label="새 위험 로그 안내 로딩 중"
+    >
+      <div className={`h-4 w-44 animate-pulse rounded ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+    </div>
+  )
 }
 
 function HelpSheet({ isDark, onClose }: { isDark: boolean; onClose: () => void }) {
@@ -301,6 +361,7 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
   const [bufferedLogCount, setBufferedLogCount] = useState(0)
   const [isSocketConnected, setIsSocketConnected] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [hasLoadedLogs, setHasLoadedLogs] = useState(false)
   const [error, setError] = useState('')
   const [selectedDetail, setSelectedDetail] = useState<HazardLogDetail | null>(null)
   const [modalError, setModalError] = useState('')
@@ -336,23 +397,33 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
     }
   }, [])
 
-  const refreshLogs = useCallback(async () => {
+  const refreshLogs = useCallback(async (options?: { minimumLoadingMs?: number }) => {
+    const loadingStartedAt = Date.now()
     setIsLoading(true)
     try {
       setLogs(await listHazardLogs())
+      const remainingMs = (options?.minimumLoadingMs ?? 0) - (Date.now() - loadingStartedAt)
+      if (remainingMs > 0) {
+        await delay(remainingMs)
+      }
       setBufferedLogCount(0)
       seenSocketEventsRef.current.clear()
       setError('')
     } catch (loadError) {
+      const remainingMs = (options?.minimumLoadingMs ?? 0) - (Date.now() - loadingStartedAt)
+      if (remainingMs > 0) {
+        await delay(remainingMs)
+      }
       setError(loadError instanceof Error ? loadError.message : '위험 로그를 불러오지 못했습니다.')
     } finally {
+      setHasLoadedLogs(true)
       setIsLoading(false)
     }
   }, [])
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
-      void refreshLogs()
+      void refreshLogs({ minimumLoadingMs: MIN_HAZARD_LOG_INITIAL_LOADING_MS })
     }, 0)
 
     return () => window.clearTimeout(timerId)
@@ -484,6 +555,8 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
     .filter((status) => statusFilter[status])
     .map((status) => STATUS_LABELS[status])
     .join(', ')
+  const isInitialLoading = isLoading && !hasLoadedLogs
+  const isRefreshing = isLoading && hasLoadedLogs
 
   return (
     <section className={`min-h-screen min-w-0 overflow-hidden ${themeTokens.app}`} data-swmm-theme={theme}>
@@ -510,28 +583,37 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
               </span>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void refreshLogs()}
-              disabled={isLoading}
-              className={`rounded-md border px-3 py-2 text-xs font-black transition disabled:cursor-wait disabled:opacity-60 ${themeTokens.buttonMuted}`}
-            >
-              새로고침
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsHelpOpen(true)}
-              className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
-            >
-              도움말
-            </button>
-          </div>
+          {isInitialLoading ? (
+            <HazardLogRefreshSkeleton isDark={isDark} />
+          ) : (
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void refreshLogs()}
+                disabled={isLoading}
+                className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-black transition disabled:cursor-wait disabled:opacity-60 ${themeTokens.buttonMuted}`}
+              >
+                {isRefreshing ? <LoadingSpinner /> : null}
+                {isRefreshing ? '불러오는 중' : '새로고침'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsHelpOpen(true)}
+                className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
+              >
+                도움말
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className={`mt-3 rounded-md border px-3 py-2 text-sm font-black ${bufferedLogCount > 0 ? 'border-rose-200 bg-rose-50 text-rose-700' : themeTokens.panelMuted}`}>
-          새 로그가 {bufferedLogCount}개 발견되었습니다.
-        </div>
+        {isInitialLoading ? (
+          <HazardLogNoticeSkeleton isDark={isDark} />
+        ) : (
+          <div className={`mt-3 rounded-md border px-3 py-2 text-sm font-black ${bufferedLogCount > 0 ? 'border-rose-200 bg-rose-50 text-rose-700' : themeTokens.panelMuted}`}>
+            새 로그가 {bufferedLogCount}개 발견되었습니다.
+          </div>
+        )}
 
         <div className={`mt-3 rounded-md border p-2 ${themeTokens.panelMuted}`}>
           <div className="flex items-center gap-2">
@@ -581,11 +663,18 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
           </p>
         ) : null}
 
+        {isRefreshing ? (
+          <div className={`mt-3 flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-black ${
+            isDark ? 'border-slate-800 bg-slate-950 text-sky-300' : 'border-sky-200 bg-sky-50 text-sky-700'
+          }`}>
+            <LoadingSpinner />
+            위험 로그를 새로 불러오는 중입니다.
+          </div>
+        ) : null}
+
         <div className="scrollbar-hidden mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
-          {isLoading && rows.length === 0 ? (
-            <div className={`rounded-lg border p-5 text-center text-sm font-black ${themeTokens.panelMuted}`}>
-              위험 로그를 불러오는 중입니다.
-            </div>
+          {isInitialLoading ? (
+            <HazardLogSkeletonCards isDark={isDark} />
           ) : rows.length === 0 ? (
             <div className={`rounded-lg border p-5 text-center text-sm font-black ${themeTokens.panelMuted}`}>
               표시할 위험 로그가 없습니다.
