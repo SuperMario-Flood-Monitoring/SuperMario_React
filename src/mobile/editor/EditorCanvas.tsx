@@ -227,11 +227,8 @@ const MOBILE_QUICK_EDIT_CAPSULE_GAP = 36
 const ENABLE_MOBILE_QUICK_EDIT_SHEET = false
 type MobileEditorInteractionMode = 'idle' | 'move' | 'resize'
 type MobileQuickEditPanel = 'type' | 'detail' | 'size'
-const MOBILE_QUICK_EDIT_TYPE_OPTIONS: EditorNodeType[] = [
-  ...FACILITY_TYPE_OPTIONS,
-  'pipeSegment',
-  ...CONNECTOR_TYPE_OPTIONS,
-]
+type MobileQuickEditActionKey = 'type' | 'detail' | 'size' | 'length' | 'relation' | 'move' | 'info' | 'delete'
+const MOBILE_QUICK_EDIT_TYPE_OPTIONS: EditorNodeType[] = FACILITY_TYPE_OPTIONS
 type MobilePinchZoomState = {
   startDistance: number
   startZoom: number
@@ -3186,7 +3183,6 @@ export const EditorCanvas = memo(function EditorCanvas({
   const [isMobileInput, setIsMobileInput] = useState(() => getInitialAppSurface() === 'mobile')
   const [mobileContextSheetHeight, setMobileContextSheetHeight] = useState(0)
   const [mobileModalSheetHeight, setMobileModalSheetHeight] = useState(0)
-  const [mobileEditorModeHudHeight, setMobileEditorModeHudHeight] = useState(0)
   const [mobileMoveArmedNodeId, setMobileMoveArmedNodeId] = useState<string | null>(null)
   const [mobileEditorMode, setMobileEditorMode] = useState<MobileEditorInteractionMode>('idle')
   const [mobileActiveNodeId, setMobileActiveNodeId] = useState<string | null>(null)
@@ -3228,7 +3224,6 @@ export const EditorCanvas = memo(function EditorCanvas({
     hasFixedYNode: boolean
     lastCursor: Point
   } | null>(null)
-  const mobileEditorModeHudRef = useRef<HTMLElement | null>(null)
   const mobileEditorSettingsSheetRef = useRef<HTMLElement | null>(null)
   const mobileEditorInfoSheetRef = useRef<HTMLElement | null>(null)
   const mobileRelationPreviewSheetRef = useRef<HTMLElement | null>(null)
@@ -3420,29 +3415,6 @@ export const EditorCanvas = memo(function EditorCanvas({
   }, [])
 
   useEffect(() => clearLongPressTimer, [clearLongPressTimer])
-
-  useEffect(() => {
-    if (!isMobileInput || mobileEditorMode === 'idle') {
-      return undefined
-    }
-
-    const hud = mobileEditorModeHudRef.current
-    if (!hud) {
-      return undefined
-    }
-
-    const updateHudHeight = () => {
-      setMobileEditorModeHudHeight(hud.getBoundingClientRect().height)
-    }
-
-    updateHudHeight()
-    const resizeObserver = new ResizeObserver(updateHudHeight)
-    resizeObserver.observe(hud)
-
-    return () => {
-      resizeObserver.disconnect()
-    }
-  }, [isMobileInput, mobileEditorMode, mobileActiveNodeId])
 
   useEffect(() => {
     if (!isMobileInput) {
@@ -4428,7 +4400,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   }, [contextMenu, isMobileInput])
 
   // 아래 함수들은 SVG 캔버스에서 직접 발생하는 pointer/context menu 액션의 진입점이다.
-  const openMobileNodeActionMenu = useCallback((node: EditorNode, point: Point, clientX: number, clientY: number) => {
+  const openMobileNodeActionMenu = useCallback((node: EditorNode, point: Point) => {
     if (!pendingPort && mobileQuickEditNodeId === node.id) {
       setSelection({ kind: 'node', id: node.id })
       setContextMenu(null)
@@ -4457,19 +4429,6 @@ export const EditorCanvas = memo(function EditorCanvas({
     setResizeDraftNodesById(null)
     setMarqueeSelectionState(null)
     setRelationPreviewNodeId(null)
-    if (pendingPort) {
-      setMobileQuickEditNodeId(null)
-      setMobileQuickEditPanel(null)
-      setMobileQuickEditAnchorPoint(null)
-      setContextMenu({
-        x: clientX,
-        y: clientY,
-        point,
-        nodeId: node.id,
-      })
-      return
-    }
-
     setContextMenu(null)
     setMobileQuickEditNodeId(isMobileQuickEditableNode(node) ? node.id : null)
     setMobileQuickEditPanel(null)
@@ -4582,6 +4541,22 @@ export const EditorCanvas = memo(function EditorCanvas({
     const cursor = getSvgCursor(event.currentTarget, event.clientX, event.clientY)
 
     if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+      const shouldKeepMobileActionSheetOpen = Boolean(
+        isMobileInput &&
+        (
+          mobileQuickEditPanel ||
+          mobileEditorMode !== 'idle' ||
+          isEditorInfoPanelOpen ||
+          relationPreviewNodeId
+        ),
+      )
+
+      if (shouldKeepMobileActionSheetOpen) {
+        clearLongPressTimer()
+        setContextMenu(null)
+        return
+      }
+
       if (
         isMobileInput &&
         contextMenu &&
@@ -5201,20 +5176,20 @@ export const EditorCanvas = memo(function EditorCanvas({
     const mobileTapCandidate = event?.type === 'pointerup' && (event.pointerType === 'touch' || event.pointerType === 'pen')
       ? mobileNodeTapCandidateRef.current
       : null
-    if (
-      mobileTapCandidate &&
-      mobileTapCandidate.pointerId === event?.pointerId &&
-      Math.hypot(
-        mobileTapCandidate.lastClientX - mobileTapCandidate.startClientX,
-        mobileTapCandidate.lastClientY - mobileTapCandidate.startClientY,
-      ) <= MOBILE_TAP_MAX_DISTANCE_PX
-    ) {
-      openMobileNodeActionMenu(
-        mobileTapCandidate.node,
-        mobileTapCandidate.point,
-        mobileTapCandidate.lastClientX,
-        mobileTapCandidate.lastClientY,
-      )
+    if (mobileTapCandidate && mobileTapCandidate.pointerId === event?.pointerId) {
+      const finalClientX = event.clientX
+      const finalClientY = event.clientY
+      if (
+        Math.hypot(
+          finalClientX - mobileTapCandidate.startClientX,
+          finalClientY - mobileTapCandidate.startClientY,
+        ) <= MOBILE_TAP_MAX_DISTANCE_PX
+      ) {
+        openMobileNodeActionMenu(
+          mobileTapCandidate.node,
+          mobileTapCandidate.point,
+        )
+      }
     }
     mobileNodeTapCandidateRef.current = null
     mobileNodeMoveRef.current = null
@@ -5429,9 +5404,23 @@ export const EditorCanvas = memo(function EditorCanvas({
     }
 
     const cursor = getSvgCursor(svg, event.clientX, event.clientY)
+    if (
+      (event.pointerType === 'touch' || event.pointerType === 'pen') &&
+      isMobileInput &&
+      (
+        mobileQuickEditPanel ||
+        mobileEditorMode !== 'idle' ||
+        isEditorInfoPanelOpen ||
+        relationPreviewNodeId
+      )
+    ) {
+      clearLongPressTimer()
+      setContextMenu(null)
+      return
+    }
+
     if (node.type === 'terrain') {
       event.preventDefault()
-      setSelection({ kind: 'node', id: node.id })
       setPendingPort(null)
       setAttachTargetNodeId(null)
       setDragState(null)
@@ -5441,12 +5430,24 @@ export const EditorCanvas = memo(function EditorCanvas({
       mobileMoveArmedNodeIdRef.current = null
       setMobileMoveArmedNodeId(null)
       setMobileEditorMode('idle')
-      setMobileActiveNodeId(node.id)
       if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+        clearLongPressTimer()
         setIsEditorInfoPanelOpen(false)
-        setMobileQuickEditNodeId(isMobileQuickEditableNode(node) ? node.id : null)
-        setMobileQuickEditAnchorPoint(isMobileQuickEditableNode(node) ? cursor : null)
-      } else if (event.pointerType === 'mouse' && !isMobileInput) {
+        mobileNodeTapCandidateRef.current = {
+          pointerId: event.pointerId,
+          node,
+          point: cursor,
+          startClientX: event.clientX,
+          startClientY: event.clientY,
+          lastClientX: event.clientX,
+          lastClientY: event.clientY,
+        }
+        return
+      }
+
+      setSelection({ kind: 'node', id: node.id })
+      setMobileActiveNodeId(node.id)
+      if (event.pointerType === 'mouse' && !isMobileInput) {
         setIsEditorInfoPanelOpen(true)
         setMobileQuickEditNodeId(null)
         setMobileQuickEditAnchorPoint(null)
@@ -5457,29 +5458,22 @@ export const EditorCanvas = memo(function EditorCanvas({
     if (event.pointerType === 'touch' || event.pointerType === 'pen') {
       setIsEditorInfoPanelOpen(false)
 
-      if (contextMenu?.nodeId === node.id && !pendingPort && mobileEditorMode === 'idle') {
-        event.preventDefault()
-        clearLongPressTimer()
-        mobileNodeTapCandidateRef.current = null
-        setContextMenu(null)
-        setMobileQuickEditNodeId(null)
-        return
-      }
-
       if (pendingPort) {
         event.preventDefault()
         clearLongPressTimer()
-        mobileNodeTapCandidateRef.current = null
-        setSelection({ kind: 'node', id: node.id })
-        setAttachTargetNodeId(node.id)
-        setMobileActiveNodeId(node.id)
+        setContextMenu(null)
         setMobileQuickEditNodeId(null)
-        setContextMenu({
-          x: event.clientX,
-          y: event.clientY,
+        setMobileQuickEditPanel(null)
+        setMobileQuickEditAnchorPoint(null)
+        mobileNodeTapCandidateRef.current = {
+          pointerId: event.pointerId,
+          node,
           point: cursor,
-          nodeId: node.id,
-        })
+          startClientX: event.clientX,
+          startClientY: event.clientY,
+          lastClientX: event.clientX,
+          lastClientY: event.clientY,
+        }
         return
       }
 
@@ -6317,11 +6311,16 @@ export const EditorCanvas = memo(function EditorCanvas({
       title="편집 정보"
       titleId="editor-info-sheet-title"
       closeLabel="편집 정보 닫기"
+      zIndexClassName="z-[234]"
+      overlayClassName="pointer-events-none fixed left-0 right-0 top-[var(--app-visual-offset-top,0px)] flex h-[var(--app-visual-height,100dvh)] items-end"
+      backdropClassName="bg-transparent"
       sectionRef={mobileEditorInfoSheetRef}
-      sheetClassName={`flex max-h-[50dvh] w-screen flex-col overflow-hidden rounded-t-2xl border-t shadow-2xl ${
+      sheetClassName={`pointer-events-auto flex max-h-[50dvh] w-screen flex-col overflow-hidden rounded-t-2xl border-t shadow-2xl ${
         isDark ? 'border-slate-800 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
       }`}
       bodyClassName="min-h-0 overflow-y-auto px-5 pb-4 pt-4"
+      ariaModal={false}
+      lockBodyScroll={false}
       onClose={() => setIsEditorInfoPanelOpen(false)}
     >
       {editorInfoPanelContent}
@@ -6450,10 +6449,14 @@ export const EditorCanvas = memo(function EditorCanvas({
       titleId="relation-preview-sheet-title"
       closeLabel="관계형성 미리보기 닫기"
       zIndexClassName="z-[235]"
+      overlayClassName="pointer-events-none fixed left-0 right-0 top-[var(--app-visual-offset-top,0px)] flex h-[var(--app-visual-height,100dvh)] items-end"
+      backdropClassName="bg-transparent"
       sectionRef={mobileRelationPreviewSheetRef}
-      sheetClassName={`flex max-h-[calc(var(--app-visual-height,100dvh)-16px)] w-screen flex-col overflow-hidden rounded-t-2xl border-t shadow-2xl ${
+      sheetClassName={`pointer-events-auto flex max-h-[calc(var(--app-visual-height,100dvh)-16px)] w-screen flex-col overflow-hidden rounded-t-2xl border-t shadow-2xl ${
         isDark ? 'border-slate-800 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
       }`}
+      ariaModal={false}
+      lockBodyScroll={false}
       onClose={() => {
         setRelationPreviewNodeId(null)
         setRelationPreviewMode('parent')
@@ -6594,21 +6597,22 @@ export const EditorCanvas = memo(function EditorCanvas({
     : 'border-emerald-200 bg-emerald-50 text-emerald-700 active:bg-emerald-100'
   const mobileDpadButtonClassName = 'flex h-10 w-10 items-center justify-center rounded-lg border text-lg font-black leading-none shadow-sm'
   const mobileDpadLabelClassName = 'flex h-10 w-10 items-center justify-center rounded-lg border text-[10px] font-black'
+  const mobileResizeModeLabel = mobileActiveEditorNode?.type === 'pipeSegment' ? '길이' : '크기'
   const mobileEditorModeHud = isMobileInput && mobileEditorMode !== 'idle' && mobileActiveNodeId ? (
     <MobileBottomSheet
       theme={theme}
-      title={mobileEditorMode === 'move' ? '객체 이동' : '크기 조절'}
+      title={mobileEditorMode === 'move' ? '객체 이동' : `${mobileResizeModeLabel} 조절`}
       description={mobileEditorMode === 'move'
         ? mobileMoveCapability?.canMoveY
           ? '버튼으로 선택 객체를 상하좌우로 이동합니다.'
           : '고정 객체와 연결되어 좌우 이동만 가능합니다.'
         : mobileResizeCapability?.preferredEdge
-          ? '객체가 지원하는 방향만 조절할 수 있습니다.'
-          : '이 객체는 현재 크기 조절을 지원하지 않습니다.'}
-      closeLabel={mobileEditorMode === 'move' ? '객체 이동 완료' : '크기 조절 완료'}
+          ? `${mobileResizeModeLabel}를 지원하는 방향만 조절할 수 있습니다.`
+          : `이 객체는 현재 ${mobileResizeModeLabel} 조절을 지원하지 않습니다.`}
+      closeLabel={mobileEditorMode === 'move' ? '객체 이동 완료' : `${mobileResizeModeLabel} 조절 완료`}
       zIndexClassName="z-[240]"
-      overlayClassName="fixed inset-x-0 bottom-0 flex items-end"
-      backdropClassName="pointer-events-none bg-transparent"
+      overlayClassName="pointer-events-none fixed left-0 right-0 top-[var(--app-visual-offset-top,0px)] flex h-[var(--app-visual-height,100dvh)] items-end"
+      backdropClassName="bg-transparent"
       sheetClassName={`pointer-events-auto flex max-h-[50dvh] w-screen flex-col overflow-hidden rounded-t-2xl border-t shadow-2xl backdrop-blur ${
         isDark
           ? 'border-slate-800 bg-slate-950/96 text-slate-100'
@@ -6624,8 +6628,7 @@ export const EditorCanvas = memo(function EditorCanvas({
           : 'border-slate-200 bg-slate-50 text-slate-700'
       }`}
       closeButtonContent="완료"
-      sectionRef={mobileEditorModeHudRef}
-      onHeightChange={setMobileEditorModeHudHeight}
+      ariaModal={false}
       lockBodyScroll={false}
       onClose={() => {
         mobileMoveArmedNodeIdRef.current = null
@@ -6768,7 +6771,7 @@ export const EditorCanvas = memo(function EditorCanvas({
               disabled
               className={`col-start-2 row-start-2 ${mobileDpadLabelClassName} ${mobileDisabledButtonClassName}`}
             >
-              크기
+              {mobileResizeModeLabel}
             </button>
             <button
               type="button"
@@ -6928,19 +6931,33 @@ export const EditorCanvas = memo(function EditorCanvas({
     const clientY = visualOffsetTop + visualHeight / 2
     return getSvgCursor(svg, clientX, clientY)
   }, [addMenuPreviewPoint, isMobileInput])
-  const activeMobileModalSheetHeight = isMobileInput && (
-    isEditorSettingsOpen ||
-    isEditorInfoPanelOpen ||
-    Boolean(relationPreviewNodeId)
-  )
+  const activeMobileModalSheetHeight = isMobileInput && isEditorSettingsOpen
     ? mobileModalSheetHeight
     : 0
-  const activeMobileEditorModeHudHeight = isMobileInput && mobileEditorMode !== 'idle'
-    ? mobileEditorModeHudHeight
-    : 0
+  const activeMobileEditorModeHudHeight = 0
   const mobileBottomSpacerHeight = isMobileInput
     ? Math.max(mobileContextSheetHeight, activeMobileModalSheetHeight, activeMobileEditorModeHudHeight)
     : 0
+  const mobileActionSheetAllowsCanvasGesture = Boolean(
+    isMobileInput &&
+    (
+      mobileQuickEditPanel ||
+      mobileEditorMode !== 'idle' ||
+      isEditorInfoPanelOpen ||
+      relationPreviewNodeId
+    ),
+  )
+  const mobileCanvasGestureGuard = mobileActionSheetAllowsCanvasGesture ? (
+    <rect
+      x="0"
+      y="0"
+      width={canvasWidth}
+      height={canvasHeight}
+      fill="transparent"
+      pointerEvents="all"
+      style={{ touchAction: 'pan-x pan-y' }}
+    />
+  ) : null
   const mobileQuickEditNode = (
     isMobileInput &&
     !contextMenu &&
@@ -7071,6 +7088,53 @@ export const EditorCanvas = memo(function EditorCanvas({
     setMobileQuickEditPanel(null)
     setMobileQuickEditAnchorPoint(null)
   }
+  const handleMobileQuickEditActionClick = (actionKey: MobileQuickEditActionKey) => {
+    if (!mobileQuickEditNode) {
+      return
+    }
+
+    if (actionKey === 'type') {
+      setMobileQuickEditPanel((current) => current === 'type' ? null : 'type')
+      return
+    }
+
+    if (actionKey === 'detail') {
+      setMobileQuickEditPanel((current) => current === 'detail' ? null : 'detail')
+      return
+    }
+
+    if (actionKey === 'size') {
+      if (mobileQuickEditCanUseSizePreset) {
+        setMobileQuickEditPanel((current) => current === 'size' ? null : 'size')
+        return
+      }
+
+      startMobileQuickEditResize(mobileQuickEditNode)
+      return
+    }
+
+    if (actionKey === 'length') {
+      startMobileQuickEditResize(mobileQuickEditNode)
+      return
+    }
+
+    if (actionKey === 'relation') {
+      startMobileQuickEditRelation(mobileQuickEditNode)
+      return
+    }
+
+    if (actionKey === 'move') {
+      startMobileQuickEditMove(mobileQuickEditNode)
+      return
+    }
+
+    if (actionKey === 'info') {
+      openMobileQuickEditInfo(mobileQuickEditNode)
+      return
+    }
+
+    deleteMobileQuickEditNode(mobileQuickEditNode)
+  }
   const mobileQuickEditRenderNode = mobileQuickEditNode
     ? renderNodesById.get(mobileQuickEditNode.id) ?? mobileQuickEditNode
     : null
@@ -7132,10 +7196,21 @@ export const EditorCanvas = memo(function EditorCanvas({
     (mobileQuickEditNode.type === 'pipeSegment' || CONNECTOR_TYPE_OPTIONS.includes(mobileQuickEditNode.type)),
   )
   const mobileQuickEditResizeCapability = mobileQuickEditNode ? getMobileResizeCapability(mobileQuickEditNode) : null
-  const mobileQuickEditCanResize = Boolean(
-    mobileQuickEditCanUseSizePreset ||
+  const mobileQuickEditCanChangeType = Boolean(
+    mobileQuickEditNode &&
+    (
+      mobileQuickEditNode.type === 'terrain' ||
+      FACILITY_TYPE_OPTIONS.includes(mobileQuickEditNode.type) ||
+      CONNECTOR_TYPE_OPTIONS.includes(mobileQuickEditNode.type)
+    ),
+  )
+  const mobileQuickEditCanLengthResize = Boolean(
     mobileQuickEditResizeCapability?.canResizeX ||
     mobileQuickEditResizeCapability?.canResizeY,
+  )
+  const mobileQuickEditCanResize = Boolean(
+    mobileQuickEditCanUseSizePreset ||
+    mobileQuickEditCanLengthResize,
   )
   const mobileQuickEditCanStartRelation = Boolean(
     mobileQuickEditNode && canNodeStartRelation(mobileQuickEditNode),
@@ -7151,11 +7226,13 @@ export const EditorCanvas = memo(function EditorCanvas({
     ),
   )
   const mobileQuickEditPanelTitle = mobileQuickEditPanel === 'type'
-    ? '객체 종류'
+    ? getMobileKindSheetLabel(mobileQuickEditNode)
     : mobileQuickEditPanel === 'detail'
-      ? '상세 종류'
+      ? mobileQuickEditNode?.type === 'pipeSegment'
+        ? '파이프 종류'
+        : '상세 종류'
       : mobileQuickEditPanel === 'size'
-        ? '사이즈'
+        ? '크기'
         : null
   const mobileQuickEditPanelContent = mobileQuickEditPanel && mobileQuickEditNode ? (
     <>
@@ -7172,9 +7249,22 @@ export const EditorCanvas = memo(function EditorCanvas({
           ))}
         </div>
       ) : null}
-      {mobileQuickEditPanel === 'type' && mobileQuickEditNode.type !== 'terrain' ? (
+      {mobileQuickEditPanel === 'type' && FACILITY_TYPE_OPTIONS.includes(mobileQuickEditNode.type) ? (
         <div className="grid grid-cols-2 gap-2">
           {MOBILE_QUICK_EDIT_TYPE_OPTIONS.map((nodeType) => (
+            <MobileQuickEditOptionButton
+              key={nodeType}
+              label={NODE_LABELS[nodeType]}
+              active={mobileQuickEditNode.type === nodeType}
+              isDark={isDark}
+              onClick={() => changeMobileQuickEditNodeType(mobileQuickEditNode, nodeType)}
+            />
+          ))}
+        </div>
+      ) : null}
+      {mobileQuickEditPanel === 'type' && CONNECTOR_TYPE_OPTIONS.includes(mobileQuickEditNode.type) ? (
+        <div className="grid grid-cols-2 gap-2">
+          {CONNECTOR_TYPE_OPTIONS.map((nodeType) => (
             <MobileQuickEditOptionButton
               key={nodeType}
               label={NODE_LABELS[nodeType]}
@@ -7265,7 +7355,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       titleId="mobile-quick-edit-option-sheet-title"
       closeLabel="빠른 편집 옵션 닫기"
       zIndexClassName="z-[236]"
-      overlayClassName="pointer-events-none fixed bottom-0 left-0 right-0 top-[var(--app-visual-offset-top,0px)] flex h-[var(--app-visual-height,100dvh)] items-end"
+      overlayClassName="pointer-events-none fixed left-0 right-0 top-[var(--app-visual-offset-top,0px)] flex h-[var(--app-visual-height,100dvh)] items-end"
       backdropClassName="bg-transparent"
       sheetClassName={`pointer-events-auto flex max-h-[50dvh] w-screen flex-col overflow-hidden rounded-t-2xl border-t shadow-2xl ${
         isDark ? 'border-slate-800 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
@@ -7278,6 +7368,99 @@ export const EditorCanvas = memo(function EditorCanvas({
       {mobileQuickEditPanelContent}
     </MobileBottomSheet>
   ) : null
+  const mobileQuickEditActions: Array<{
+    key: MobileQuickEditActionKey
+    label: string
+    icon: string
+    active: boolean
+    disabled: boolean
+    tone?: 'destructive'
+  }> = []
+  if (mobileQuickEditNode) {
+    if (mobileQuickEditCanChangeType) {
+      mobileQuickEditActions.push({
+        key: 'type',
+        label: '종류',
+        icon: '▦',
+        active: mobileQuickEditPanel === 'type',
+        disabled: false,
+      })
+    }
+
+    if (!mobileQuickEditIsTerrain) {
+      mobileQuickEditActions.push({
+        key: 'detail',
+        label: mobileQuickEditNode.type === 'pipeSegment' ? '종류' : '상세',
+        icon: '⋯',
+        active: mobileQuickEditPanel === 'detail',
+        disabled: !mobileQuickEditHasDetailOptions,
+      })
+    }
+
+    if (mobileQuickEditNode.type === 'pipeSegment') {
+      mobileQuickEditActions.push({
+        key: 'size',
+        label: '크기',
+        icon: '◯',
+        active: mobileQuickEditPanel === 'size',
+        disabled: !mobileQuickEditCanUseSizePreset,
+      })
+      mobileQuickEditActions.push({
+        key: 'length',
+        label: '길이',
+        icon: '↔',
+        active: false,
+        disabled: !mobileQuickEditCanLengthResize,
+      })
+    } else {
+      mobileQuickEditActions.push({
+        key: 'size',
+        label: '크기',
+        icon: '↔',
+        active: mobileQuickEditPanel === 'size',
+        disabled: !mobileQuickEditCanResize,
+      })
+    }
+
+    mobileQuickEditActions.push({
+      key: 'relation',
+      label: '관계',
+      icon: '⛓',
+      active: false,
+      disabled: !mobileQuickEditCanStartRelation,
+    })
+    mobileQuickEditActions.push({
+      key: 'move',
+      label: '이동',
+      icon: '↕',
+      active: false,
+      disabled: mobileQuickEditIsTerrain,
+    })
+    mobileQuickEditActions.push({
+      key: 'info',
+      label: '정보',
+      icon: 'i',
+      active: false,
+      disabled: false,
+    })
+    mobileQuickEditActions.push({
+      key: 'delete',
+      label: '삭제',
+      icon: '×',
+      active: false,
+      disabled: false,
+      tone: 'destructive',
+    })
+  }
+  const mobileQuickEditActionGap = 12
+  const mobileQuickEditActionPaddingX = 34
+  const mobileQuickEditActionWidth = mobileQuickEditCapsulePosition && mobileQuickEditActions.length > 0
+    ? (
+        mobileQuickEditCapsulePosition.width -
+        mobileQuickEditActionPaddingX * 2 -
+        mobileQuickEditActionGap * (mobileQuickEditActions.length - 1)
+      ) / mobileQuickEditActions.length
+    : 0
   const mobileQuickEditCapsule = shouldShowMobileQuickEditCapsule && mobileQuickEditNode && mobileQuickEditCapsulePosition ? (
     <g
       transform={`translate(${mobileQuickEditCapsulePosition.x} ${mobileQuickEditCapsulePosition.y})`}
@@ -7363,94 +7546,22 @@ export const EditorCanvas = memo(function EditorCanvas({
           ×
         </text>
       </g>
-      {(() => {
-        const actionGap = 12
-        const actionPaddingX = 34
-        const actions = [
-          {
-            key: 'type',
-            label: '종류',
-            icon: '▦',
-            active: mobileQuickEditPanel === 'type',
-            disabled: false,
-            onClick: () => setMobileQuickEditPanel((current) => current === 'type' ? null : 'type'),
-          },
-          ...(mobileQuickEditIsTerrain ? [] : [{
-            key: 'detail',
-            label: '상세',
-            icon: '⋯',
-            active: mobileQuickEditPanel === 'detail',
-            disabled: !mobileQuickEditHasDetailOptions,
-            onClick: () => setMobileQuickEditPanel((current) => current === 'detail' ? null : 'detail'),
-          }]),
-          {
-            key: 'size',
-            label: '크기',
-            icon: '↔',
-            active: mobileQuickEditPanel === 'size',
-            disabled: !mobileQuickEditCanResize,
-            onClick: () => {
-              if (mobileQuickEditCanUseSizePreset) {
-                setMobileQuickEditPanel((current) => current === 'size' ? null : 'size')
-                return
-              }
-
-              startMobileQuickEditResize(mobileQuickEditNode)
-            },
-          },
-          {
-            key: 'relation',
-            label: '관계',
-            icon: '⛓',
-            active: false,
-            disabled: !mobileQuickEditCanStartRelation,
-            onClick: () => startMobileQuickEditRelation(mobileQuickEditNode),
-          },
-          {
-            key: 'move',
-            label: '이동',
-            icon: '↕',
-            active: false,
-            disabled: mobileQuickEditIsTerrain,
-            onClick: () => startMobileQuickEditMove(mobileQuickEditNode),
-          },
-          {
-            key: 'info',
-            label: '정보',
-            icon: 'i',
-            active: false,
-            disabled: false,
-            onClick: () => openMobileQuickEditInfo(mobileQuickEditNode),
-          },
-          {
-            key: 'delete',
-            label: '삭제',
-            icon: '×',
-            active: false,
-            disabled: false,
-            tone: 'destructive' as const,
-            onClick: () => deleteMobileQuickEditNode(mobileQuickEditNode),
-          },
-        ]
-        const actionWidth = (mobileQuickEditCapsulePosition.width - actionPaddingX * 2 - actionGap * (actions.length - 1)) / actions.length
-
-        return actions.map((action, index) => (
-          <MobileQuickEditSvgActionButton
-            key={action.key}
-            x={actionPaddingX + (actionWidth + actionGap) * index}
-            y={178}
-            width={actionWidth}
-            height={138}
-            label={action.label}
-            icon={action.icon}
-            active={action.active}
-            disabled={action.disabled}
-            tone={action.tone}
-            isDark={isDark}
-            onClick={action.onClick}
-          />
-        ))
-      })()}
+      {mobileQuickEditActions.map((action, index) => (
+        <MobileQuickEditSvgActionButton
+          key={action.key}
+          x={mobileQuickEditActionPaddingX + (mobileQuickEditActionWidth + mobileQuickEditActionGap) * index}
+          y={178}
+          width={mobileQuickEditActionWidth}
+          height={138}
+          label={action.label}
+          icon={action.icon}
+          active={action.active}
+          disabled={action.disabled}
+          tone={action.tone}
+          isDark={isDark}
+          onClick={() => handleMobileQuickEditActionClick(action.key)}
+        />
+      ))}
     </g>
   ) : null
   const mobileQuickEditSheet = shouldShowMobileQuickEditSheet && mobileQuickEditNode ? (
@@ -7689,108 +7800,111 @@ export const EditorCanvas = memo(function EditorCanvas({
               />
             ) : null}
 
-            <EditableNodeLayer
-              nodes={terrainNodes}
-              renderNodesById={renderNodesById}
-              selectedNodeIds={selectedNodeIds}
-              renderedPortRelationLookupByNodeId={renderedPortRelationLookupByNodeId}
-              connectedPortKeys={connectedPortKeys}
-              selectedRelationPortRoles={selectedRelationPortRoles}
-              selectedParentPortKeys={selectedParentPortKeys}
-              pendingPort={pendingPort}
-              attachTargetNodeId={attachTargetNodeId}
-              coordinateEditActive={Boolean(coordinateEditState)}
-              getRenderablePorts={getNodeRenderablePorts}
-              getRenderedPortPoint={getRenderedPortPointFromLookup}
-              hasManualResizableEdge={hasManualResizableEdge}
-              renderResizeHandles={renderResizeHandles}
-              onPointerDown={handleNodePointerDown}
-              onPointerEnter={handleNodePointerEnter}
-              onNodeContextMenu={handleNodeContextMenu}
-              onPortClick={handlePortClick}
-              onPortContextMenu={handlePortContextMenu}
-              onResizePointerDown={handlePipeResizePointerDown}
-            />
-            {isMobileInput ? (
-              <g>
-                {terrainNodes.map((node) => {
-                  const renderNode = renderNodesById.get(node.id) ?? node
-
-                  return (
-                    <g key={`${node.id}-mobile-layout-add-buttons`}>
-                      <MobileLayoutAddEdgeButtons
-                        bounds={{
-                          left: renderNode.x,
-                          top: renderNode.y,
-                          right: renderNode.x + renderNode.width,
-                          bottom: renderNode.y + renderNode.height,
-                        }}
-                        onPointerDown={(side, event) => handleNodeLayoutAddPointerDown(renderNode, side, event)}
-                      />
-                    </g>
-                  )
-                })}
-                <MobileLayoutAddEdgeButtons
-                  bounds={baseGroundBounds}
-                  onPointerDown={handleBaseLayoutAddPointerDown}
-                />
-              </g>
-            ) : (
-              <g>
-                {terrainNodes.map((node) => {
-                  const renderNode = renderNodesById.get(node.id) ?? node
-
-                  return (
-                    <g key={`${node.id}-layout-add-handles`} transform={`translate(${renderNode.x} ${renderNode.y})`}>
-                      <LayoutAddHandles
-                        bounds={{ left: 0, top: 0, right: renderNode.width, bottom: renderNode.height }}
-                        onPointerDown={(side, event) => handleNodeLayoutAddPointerDown(renderNode, side, event)}
-                      />
-                    </g>
-                  )
-                })}
-                <LayoutAddHandles
-                  bounds={baseGroundBounds}
-                  onPointerDown={handleBaseLayoutAddPointerDown}
-                />
-              </g>
-            )}
-
             <g>
-              {layout.links.map((link) => (
-                <EditableLink
-                  key={link.id}
-                  link={link}
-                  fromNode={renderNodesById.get(link.from.nodeId) ?? null}
-                  toNode={renderNodesById.get(link.to.nodeId) ?? null}
-                  selected={selection?.kind === 'link' && selection.id === link.id}
-                  onSelect={handleLinkSelect}
-                />
-              ))}
-            </g>
+              <EditableNodeLayer
+                nodes={terrainNodes}
+                renderNodesById={renderNodesById}
+                selectedNodeIds={selectedNodeIds}
+                renderedPortRelationLookupByNodeId={renderedPortRelationLookupByNodeId}
+                connectedPortKeys={connectedPortKeys}
+                selectedRelationPortRoles={selectedRelationPortRoles}
+                selectedParentPortKeys={selectedParentPortKeys}
+                pendingPort={pendingPort}
+                attachTargetNodeId={attachTargetNodeId}
+                coordinateEditActive={Boolean(coordinateEditState)}
+                getRenderablePorts={getNodeRenderablePorts}
+                getRenderedPortPoint={getRenderedPortPointFromLookup}
+                hasManualResizableEdge={hasManualResizableEdge}
+                renderResizeHandles={renderResizeHandles}
+                onPointerDown={handleNodePointerDown}
+                onPointerEnter={handleNodePointerEnter}
+                onNodeContextMenu={handleNodeContextMenu}
+                onPortClick={handlePortClick}
+                onPortContextMenu={handlePortContextMenu}
+                onResizePointerDown={handlePipeResizePointerDown}
+              />
+              {isMobileInput ? (
+                <g>
+                  {terrainNodes.map((node) => {
+                    const renderNode = renderNodesById.get(node.id) ?? node
 
-            <EditableNodeLayer
-              nodes={drawableNodes}
-              renderNodesById={renderNodesById}
-              selectedNodeIds={selectedNodeIds}
-              renderedPortRelationLookupByNodeId={renderedPortRelationLookupByNodeId}
-              connectedPortKeys={connectedPortKeys}
-              selectedRelationPortRoles={selectedRelationPortRoles}
-              selectedParentPortKeys={selectedParentPortKeys}
-              pendingPort={pendingPort}
-              attachTargetNodeId={attachTargetNodeId}
-              coordinateEditActive={Boolean(coordinateEditState)}
-              getRenderablePorts={getNodeRenderablePorts}
-              getRenderedPortPoint={getRenderedPortPointFromLookup}
-              hasManualResizableEdge={hasManualResizableEdge}
-              renderResizeHandles={renderResizeHandles}
-              onPointerDown={handleNodePointerDown}
-              onPointerEnter={handleNodePointerEnter}
-              onNodeContextMenu={handleNodeContextMenu}
-              onPortClick={handlePortClick}
-              onPortContextMenu={handlePortContextMenu}
-              onResizePointerDown={handlePipeResizePointerDown}
-            />
+                    return (
+                      <g key={`${node.id}-mobile-layout-add-buttons`}>
+                        <MobileLayoutAddEdgeButtons
+                          bounds={{
+                            left: renderNode.x,
+                            top: renderNode.y,
+                            right: renderNode.x + renderNode.width,
+                            bottom: renderNode.y + renderNode.height,
+                          }}
+                          onPointerDown={(side, event) => handleNodeLayoutAddPointerDown(renderNode, side, event)}
+                        />
+                      </g>
+                    )
+                  })}
+                  <MobileLayoutAddEdgeButtons
+                    bounds={baseGroundBounds}
+                    onPointerDown={handleBaseLayoutAddPointerDown}
+                  />
+                </g>
+              ) : (
+                <g>
+                  {terrainNodes.map((node) => {
+                    const renderNode = renderNodesById.get(node.id) ?? node
+
+                    return (
+                      <g key={`${node.id}-layout-add-handles`} transform={`translate(${renderNode.x} ${renderNode.y})`}>
+                        <LayoutAddHandles
+                          bounds={{ left: 0, top: 0, right: renderNode.width, bottom: renderNode.height }}
+                          onPointerDown={(side, event) => handleNodeLayoutAddPointerDown(renderNode, side, event)}
+                        />
+                      </g>
+                    )
+                  })}
+                  <LayoutAddHandles
+                    bounds={baseGroundBounds}
+                    onPointerDown={handleBaseLayoutAddPointerDown}
+                  />
+                </g>
+              )}
+
+              <g>
+                {layout.links.map((link) => (
+                  <EditableLink
+                    key={link.id}
+                    link={link}
+                    fromNode={renderNodesById.get(link.from.nodeId) ?? null}
+                    toNode={renderNodesById.get(link.to.nodeId) ?? null}
+                    selected={selection?.kind === 'link' && selection.id === link.id}
+                    onSelect={handleLinkSelect}
+                  />
+                ))}
+              </g>
+
+              <EditableNodeLayer
+                nodes={drawableNodes}
+                renderNodesById={renderNodesById}
+                selectedNodeIds={selectedNodeIds}
+                renderedPortRelationLookupByNodeId={renderedPortRelationLookupByNodeId}
+                connectedPortKeys={connectedPortKeys}
+                selectedRelationPortRoles={selectedRelationPortRoles}
+                selectedParentPortKeys={selectedParentPortKeys}
+                pendingPort={pendingPort}
+                attachTargetNodeId={attachTargetNodeId}
+                coordinateEditActive={Boolean(coordinateEditState)}
+                getRenderablePorts={getNodeRenderablePorts}
+                getRenderedPortPoint={getRenderedPortPointFromLookup}
+                hasManualResizableEdge={hasManualResizableEdge}
+                renderResizeHandles={renderResizeHandles}
+                onPointerDown={handleNodePointerDown}
+                onPointerEnter={handleNodePointerEnter}
+                onNodeContextMenu={handleNodeContextMenu}
+                onPortClick={handlePortClick}
+                onPortContextMenu={handlePortContextMenu}
+                onResizePointerDown={handlePipeResizePointerDown}
+              />
+            </g>
+            {mobileCanvasGestureGuard}
             {selectedOutlineNodes.length > 0 ? (
               <g pointerEvents="none">
                 {selectedOutlineNodes.map((node) => {

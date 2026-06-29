@@ -4226,6 +4226,12 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // 아래 함수들은 SVG 캔버스에서 직접 발생하는 pointer/context menu 액션의 진입점이다.
   const openMobileNodeActionMenu = useCallback((node: EditorNode, point: Point, clientX: number, clientY: number) => {
+    if (!pendingPort && contextMenu?.nodeId === node.id) {
+      setSelection({ kind: 'node', id: node.id })
+      setContextMenu(null)
+      return
+    }
+
     setSelection({ kind: 'node', id: node.id })
     setIsEditorInfoPanelOpen(false)
     mobileMoveArmedNodeIdRef.current = null
@@ -4251,7 +4257,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       point,
       nodeId: node.id,
     })
-  }, [pendingPort])
+  }, [contextMenu, pendingPort])
 
   const openAddMenuAtViewportCenter = useCallback(() => {
     if (blockReadOnlyScenarioAction()) {
@@ -4844,20 +4850,22 @@ export const EditorCanvas = memo(function EditorCanvas({
     const mobileTapCandidate = event?.type === 'pointerup' && (event.pointerType === 'touch' || event.pointerType === 'pen')
       ? mobileNodeTapCandidateRef.current
       : null
-    if (
-      mobileTapCandidate &&
-      mobileTapCandidate.pointerId === event?.pointerId &&
-      Math.hypot(
-        mobileTapCandidate.lastClientX - mobileTapCandidate.startClientX,
-        mobileTapCandidate.lastClientY - mobileTapCandidate.startClientY,
-      ) <= MOBILE_TAP_MAX_DISTANCE_PX
-    ) {
-      openMobileNodeActionMenu(
-        mobileTapCandidate.node,
-        mobileTapCandidate.point,
-        mobileTapCandidate.lastClientX,
-        mobileTapCandidate.lastClientY,
-      )
+    if (mobileTapCandidate && mobileTapCandidate.pointerId === event?.pointerId) {
+      const finalClientX = event.clientX
+      const finalClientY = event.clientY
+      if (
+        Math.hypot(
+          finalClientX - mobileTapCandidate.startClientX,
+          finalClientY - mobileTapCandidate.startClientY,
+        ) <= MOBILE_TAP_MAX_DISTANCE_PX
+      ) {
+        openMobileNodeActionMenu(
+          mobileTapCandidate.node,
+          mobileTapCandidate.point,
+          finalClientX,
+          finalClientY,
+        )
+      }
     }
     mobileNodeTapCandidateRef.current = null
     mobileNodeMoveRef.current = null
@@ -5073,13 +5081,27 @@ export const EditorCanvas = memo(function EditorCanvas({
     const cursor = getSvgCursor(svg, event.clientX, event.clientY)
     if (node.type === 'terrain') {
       event.preventDefault()
-      setSelection({ kind: 'node', id: node.id })
       setPendingPort(null)
       setAttachTargetNodeId(null)
       setDragState(null)
       setDragDraftPositionsByNodeId(null)
       setResizeState(null)
       setResizeDraftNodesById(null)
+      if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+        clearLongPressTimer()
+        mobileNodeTapCandidateRef.current = {
+          pointerId: event.pointerId,
+          node,
+          point: cursor,
+          startClientX: event.clientX,
+          startClientY: event.clientY,
+          lastClientX: event.clientX,
+          lastClientY: event.clientY,
+        }
+        return
+      }
+
+      setSelection({ kind: 'node', id: node.id })
       if (event.pointerType === 'mouse' && !isMobileInput) {
         setIsEditorInfoPanelOpen(true)
       }
@@ -5088,14 +5110,6 @@ export const EditorCanvas = memo(function EditorCanvas({
 
     if (event.pointerType === 'touch' || event.pointerType === 'pen') {
       setIsEditorInfoPanelOpen(false)
-
-      if (contextMenu?.nodeId === node.id && !pendingPort && mobileEditorMode === 'idle') {
-        event.preventDefault()
-        clearLongPressTimer()
-        mobileNodeTapCandidateRef.current = null
-        setContextMenu(null)
-        return
-      }
 
       if (pendingPort) {
         event.preventDefault()
