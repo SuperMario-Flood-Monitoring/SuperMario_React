@@ -64,6 +64,25 @@ function StatusBadge({ status }: { status: HazardLogRecord['status'] }) {
   )
 }
 
+function FilterIcon({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 5h16" />
+      <path d="M7 12h10" />
+      <path d="M10 19h4" />
+    </svg>
+  )
+}
+
 function getLogDisplayContent(log: HazardLogRecord) {
   if (log.status === 'IN_PROGRESS' && log.actionDetail) {
     return log.actionDetail
@@ -519,8 +538,9 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
             <button
               type="button"
               onClick={() => setIsStatusFilterOpen((current) => !current)}
-              className={`flex-1 rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
             >
+              <FilterIcon />
               상태
             </button>
             <button
