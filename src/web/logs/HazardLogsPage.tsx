@@ -11,6 +11,7 @@ import {
 import { formatHazardDetail, formatHazardTypeLabel } from '../../shared/hazards/hazardDisplay'
 import { getSwmmWebSocketUrl } from '../../services/swmm/client'
 import { isRealtimeSnapshot } from '../../services/swmm/editorRuntime'
+import type { SwmmRealtimeSnapshot, SwmmRiskEvent } from '../../services/swmm/dto'
 import { SWMM_ENGINE_URL } from '../editor/editorDefinitions'
 import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchTheme'
 
@@ -54,6 +55,45 @@ function formatDateTime(value: string | null | undefined) {
 
 function getLatestOpenAction(actions: HazardActionRecord[]) {
   return [...actions].reverse().find((action) => !action.resultDetail) ?? null
+}
+
+function hashString(value: string) {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash) + value.charCodeAt(index)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+function buildSocketEventKey(riskEvent: SwmmRiskEvent, snapshot: SwmmRealtimeSnapshot) {
+  return `${riskEvent.eventId}:${snapshot.runId ?? ''}`
+}
+
+function buildSocketHazardLog(riskEvent: SwmmRiskEvent, snapshot: SwmmRealtimeSnapshot): HazardLogRecord {
+  const eventKey = buildSocketEventKey(riskEvent, snapshot)
+  return {
+    id: -hashString(eventKey),
+    targetId: riskEvent.sourceId || '-',
+    pipeId: riskEvent.source === 'link' ? riskEvent.sourceId : null,
+    source: riskEvent.source || '-',
+    hazardLevel: riskEvent.severity || 'CRITICAL',
+    hazardType: riskEvent.eventType || '-',
+    hazardDetail: riskEvent.reason || `${riskEvent.sourceId || '대상'}에서 위험이 감지되었습니다.`,
+    status: 'OPEN',
+    priorityScore: Number(riskEvent.metrics.priorityScore ?? 0),
+    priorityBand: String(riskEvent.metrics.priorityBand ?? 'P1'),
+    priorityReasons: Array.isArray(riskEvent.metrics.priorityReasons)
+      ? riskEvent.metrics.priorityReasons.map(String)
+      : [],
+    createdAt: snapshot.modelTime || new Date().toISOString(),
+  }
+}
+
+function mergeSocketBufferedLogs(apiLogs: HazardLogRecord[], bufferedLogs: HazardLogRecord[]) {
+  const apiLogKeys = new Set(apiLogs.map((log) => `${log.hazardType}:${log.targetId}:${log.hazardLevel}`))
+  const pendingLogs = bufferedLogs.filter((log) => !apiLogKeys.has(`${log.hazardType}:${log.targetId}:${log.hazardLevel}`))
+  return [...pendingLogs, ...apiLogs]
 }
 
 function StatusBadge({ status }: { status: HazardLogRecord['status'] }) {
@@ -107,6 +147,22 @@ function LoadingSpinner({ className = 'h-3.5 w-3.5' }: { className?: string }) {
       className={`inline-block animate-spin rounded-full border-2 border-current border-r-transparent ${className}`}
       aria-hidden="true"
     />
+  )
+}
+
+function CenterProgress({ isDark }: { isDark: boolean }) {
+  return (
+    <div className="flex h-full min-h-[260px] items-center justify-center px-6" role="status" aria-live="polite">
+      <div className="w-full max-w-[360px] text-center">
+        <div className={`mx-auto h-10 w-10 animate-spin rounded-full border-4 border-r-transparent ${isDark ? 'border-sky-300' : 'border-sky-600'}`} />
+        <div className={`mt-5 h-2 overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
+          <div className="h-full w-1/2 animate-pulse rounded-full bg-sky-500" />
+        </div>
+        <p className={`mt-3 text-sm font-black ${isDark ? 'text-sky-200' : 'text-sky-700'}`}>
+          위험 로그를 새로 불러오는 중입니다.
+        </p>
+      </div>
+    </div>
   )
 }
 
@@ -385,18 +441,26 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
   const [statusFilter, setStatusFilter] = useState<StatusFilterState>(DEFAULT_STATUS_FILTER)
   const [timeSortDirection, setTimeSortDirection] = useState<TimeSortDirection>('desc')
   const seenSocketEventsRef = useRef(new Set<string>())
+  const bufferedSocketLogsRef = useRef(new Map<string, HazardLogRecord>())
 
   const refreshLogs = useCallback(async (options?: { minimumLoadingMs?: number }) => {
     const loadingStartedAt = Date.now()
     setIsLoading(true)
     try {
-      setLogs(await listHazardLogs())
+      const nextLogs = await listHazardLogs()
       const remainingMs = (options?.minimumLoadingMs ?? 0) - (Date.now() - loadingStartedAt)
       if (remainingMs > 0) {
         await delay(remainingMs)
       }
+      setLogs((currentLogs) => mergeSocketBufferedLogs(
+        nextLogs,
+        [
+          ...currentLogs.filter((log) => log.id < 0),
+          ...Array.from(bufferedSocketLogsRef.current.values()),
+        ],
+      ))
       setBufferedLogCount(0)
-      seenSocketEventsRef.current.clear()
+      bufferedSocketLogsRef.current.clear()
       setError('')
     } catch (loadError) {
       const remainingMs = (options?.minimumLoadingMs ?? 0) - (Date.now() - loadingStartedAt)
@@ -433,9 +497,10 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
         const criticalEvents = payload.risk?.events.filter((riskEvent) => riskEvent.severity === 'CRITICAL') ?? []
         let addedCount = 0
         criticalEvents.forEach((riskEvent) => {
-          const eventKey = `${riskEvent.eventId}:${payload.runId ?? ''}`
+          const eventKey = buildSocketEventKey(riskEvent, payload)
           if (!seenSocketEventsRef.current.has(eventKey)) {
             seenSocketEventsRef.current.add(eventKey)
+            bufferedSocketLogsRef.current.set(eventKey, buildSocketHazardLog(riskEvent, payload))
             addedCount += 1
           }
         })
@@ -613,8 +678,10 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
                 <button
                   type="button"
                   onClick={() => setIsStatusFilterOpen((current) => !current)}
-                  className={`inline-flex items-center gap-1.5 rounded px-1.5 py-1 text-left font-black transition ${
-                    isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-200'
+                  className={`inline-flex items-center gap-1.5 rounded px-2 py-1.5 text-left font-black transition ${
+                    isStatusFilterOpen
+                      ? isDark ? 'bg-sky-950 text-sky-200 ring-2 ring-sky-700' : 'bg-sky-100 text-sky-800 ring-2 ring-sky-300'
+                      : isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-200'
                   }`}
                 >
                   <FilterIcon />
@@ -629,8 +696,10 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
                 <button
                   type="button"
                   onClick={() => setTimeSortDirection((current) => (current === 'desc' ? 'asc' : 'desc'))}
-                  className={`rounded px-1.5 py-1 text-left font-black transition ${
-                    isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-200'
+                  className={`rounded px-2 py-1.5 text-left font-black transition ${
+                    timeSortDirection === 'desc'
+                      ? isDark ? 'bg-indigo-950 text-indigo-200 ring-2 ring-indigo-700' : 'bg-indigo-100 text-indigo-800 ring-2 ring-indigo-300'
+                      : isDark ? 'bg-emerald-950 text-emerald-200 ring-2 ring-emerald-700' : 'bg-emerald-100 text-emerald-800 ring-2 ring-emerald-300'
                   }`}
                   title={timeSortDirection === 'desc' ? '최신순' : '과거순'}
                 >
@@ -662,17 +731,11 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
                 ))}
               </div>
             ) : null}
-            {isRefreshing ? (
-              <div className={`flex items-center gap-2 border-b px-4 py-3 text-xs font-black ${
-                isDark ? 'border-slate-800 bg-slate-950 text-sky-300' : 'border-slate-200 bg-sky-50 text-sky-700'
-              }`}>
-                <LoadingSpinner />
-                위험 로그를 새로 불러오는 중입니다.
-              </div>
-            ) : null}
             <div className="scrollbar-hidden min-h-0 flex-1 overflow-y-auto">
               {isInitialLoading ? (
                 <HazardLogSkeletonRows isDark={isDark} />
+              ) : isRefreshing ? (
+                <CenterProgress isDark={isDark} />
               ) : rows.length === 0 ? (
                 <div className="p-6 text-sm font-black text-slate-500">표시할 위험 로그가 없습니다.</div>
               ) : (
