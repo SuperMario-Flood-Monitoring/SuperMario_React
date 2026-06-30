@@ -3,6 +3,7 @@ import { InfoPanelToggleButton, type InfoPanelControls } from './InfoPanelLayout
 import { MobileLandscapeNotice } from './MobileLandscapeNotice'
 import { useMobileLandscapePreference } from './mobileLandscape'
 import { SimulationWorkbench } from '../simulation/SimulationWorkbench'
+import { HazardLogsPage } from '../logs/HazardLogsPage'
 import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchTheme'
 import logoImage from '../../assets/supermario-logo.png'
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
@@ -11,7 +12,7 @@ const NotificationChatModal = lazy(() => import('../notifications/NotificationCh
   default: module.NotificationChatModal,
 })))
 
-export type WorkbenchMode = 'simulation' | 'editor'
+export type WorkbenchMode = 'simulation' | 'editor' | 'logs'
 
 interface DrainageWorkbenchProps {
   mode?: WorkbenchMode
@@ -35,6 +36,10 @@ const VIEW_CONFIG: Record<
   editor: {
     label: '편집 모드',
     description: '드래그와 포트 클릭으로 배수 객체를 배치하고 SWMM형 nodes/links JSON을 만드는 화면입니다.',
+  },
+  logs: {
+    label: '위험 로그',
+    description: 'SWMM runtime이 위험으로 판정한 로그를 확인하고 현장 조치 이력을 저장하는 화면입니다.',
   },
 }
 
@@ -158,7 +163,7 @@ export function DrainageWorkbench({
     setInternalMode(nextMode)
     onModeChange?.(nextMode)
   }, [onModeChange])
-  const mobileActionGridColumns = onLogout ? 'grid-cols-4' : 'grid-cols-3'
+  const mobileActionGridColumns = onLogout ? 'grid-cols-5' : 'grid-cols-4'
 
   const renderWorkbenchActions = useCallback((variant: 'desktop' | 'mobile' = 'desktop') => {
     const actionButtonClassName = variant === 'mobile'
@@ -262,6 +267,8 @@ export function DrainageWorkbench({
       />
       {activeMode === 'editor' ? (
         <EditorCanvas theme={theme} renderHeader={renderWorkbenchHeader} />
+      ) : activeMode === 'logs' ? (
+        <HazardLogsPage theme={theme} renderHeader={renderWorkbenchHeader} />
       ) : (
         <SimulationWorkbench
           theme={theme}
