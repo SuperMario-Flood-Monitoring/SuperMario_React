@@ -101,6 +101,7 @@ const RAINFALL_TEST_SLIDER_MAX = 500
 const RAINFALL_TEST_SLIDER_STEP = 10
 const FULLSCREEN_ZOOM_MIN = 1
 const FULLSCREEN_ZOOM_STEP = 0.25
+const FULL_BLOCKAGE_RATIO_THRESHOLD = 0.999999
 
 function forwardBackgroundWheelToElementBelow(event: ReactWheelEvent<HTMLElement>) {
   if (event.target !== event.currentTarget) {
@@ -357,6 +358,10 @@ function getSelectedObjectFillRatio(nodeType: string, state: RuntimeObjectState 
     state?.maxFullness ?? 0,
     state?.maxDepthRatio ?? 0,
   )
+}
+
+function isFullyBlockedState(state: RuntimeObjectState | undefined) {
+  return (state?.maxBlockageRatio ?? 0) >= FULL_BLOCKAGE_RATIO_THRESHOLD
 }
 
 /** editor node type을 한국어 표시명으로 변환한다. */
@@ -1175,6 +1180,12 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   }
 
   const shouldRenderRuntimeInfo = isInfoPanelOpen
+  const isSelectedPipeSegment = selectedPreviewNode?.type === 'pipeSegment'
+  const isSelectedPipeStopped = Boolean(isSelectedPipeSegment && isFullyBlockedState(selectedPreviewState))
+  const selectedFlowCms = isSelectedPipeStopped ? 0 : selectedPreviewState?.flowCms
+  const selectedVelocityMps = isSelectedPipeStopped ? 0 : selectedPreviewState?.maxVelocityMps
+  const selectedNodeDepthValue = isSelectedPipeSegment ? '-' : formatPrecisePercent(selectedPreviewState?.maxDepthRatio)
+  const selectedExternalInflowValue = isSelectedPipeSegment ? '-' : formatNumber(selectedPreviewState?.totalInflowCms, 5)
   const selectedObjectInfoPanel = shouldRenderRuntimeInfo ? (
     <div>
       <h3 className="text-sm font-black">선택 객체 정보</h3>
@@ -1192,14 +1203,14 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
           <div className="grid grid-cols-2 gap-2">
             <StatCell label="editor id" value={selectedPreviewNode.id} />
             <StatCell label="swmm id" value={selectedPreviewNode.swmmId || '-'} />
-            <StatCell label="관 유량" value={formatNumber(selectedPreviewState?.flowCms)} />
-            <StatCell label="유속" value={formatNumber(selectedPreviewState?.maxVelocityMps)} />
+            <StatCell label="관 유량" value={formatNumber(selectedFlowCms)} />
+            <StatCell label="유속" value={formatNumber(selectedVelocityMps)} />
             <StatCell label="차오름" value={formatPercentWithDetail(getSelectedObjectFillRatio(selectedPreviewNode.type, selectedPreviewState))} />
             <StatCell label="막힘" value={formatPercentWithDetail(selectedPreviewState?.maxBlockageRatio)} />
-            <StatCell label="노드 수위" value={formatPrecisePercent(selectedPreviewState?.maxDepthRatio)} />
+            <StatCell label="노드 수위" value={selectedNodeDepthValue} />
             <StatCell label="관 만관율" value={formatPrecisePercent(selectedPreviewState?.maxFullness)} />
             <StatCell label="용량" value={formatPrecisePercent(selectedPreviewState?.maxCapacityRatio)} />
-            <StatCell label="외부 유입" value={formatNumber(selectedPreviewState?.totalInflowCms, 5)} />
+            <StatCell label="외부 유입" value={selectedExternalInflowValue} />
           </div>
           <div className={`rounded-md border px-3 py-2 text-xs font-bold leading-5 ${
             isDark ? 'border-slate-800 bg-slate-950 text-slate-200' : 'border-slate-100 bg-slate-50 text-slate-600'
