@@ -12,9 +12,9 @@ import { formatHazardDetail, formatHazardTypeLabel } from '../../shared/hazards/
 import { getSwmmWebSocketUrl } from '../../services/swmm/client'
 import { isRealtimeSnapshot } from '../../services/swmm/editorRuntime'
 import type { SwmmRealtimeSnapshot, SwmmRiskEvent } from '../../services/swmm/dto'
+import { MobileBottomSheet } from '../../shared/ui/MobileBottomSheet'
 import { SWMM_ENGINE_URL } from '../editor/editorDefinitions'
 import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchTheme'
-import { useBodyScrollLock } from '../ui/useBodyScrollLock'
 
 interface HazardLogsPageProps {
   theme?: WorkbenchTheme
@@ -212,65 +212,56 @@ function HazardLogNoticeSkeleton({ isDark }: { isDark: boolean }) {
 }
 
 function HelpSheet({ isDark, onClose }: { isDark: boolean; onClose: () => void }) {
+  const theme = isDark ? 'dark' : 'light'
   const mutedTextClass = isDark ? 'text-slate-400' : 'text-slate-500'
   const itemClass = isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'
+  const closeButtonClassName = `inline-flex h-10 min-w-16 shrink-0 items-center justify-center rounded-md border px-3 text-center text-sm font-black leading-none transition ${
+    isDark ? 'border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+  }`
 
   return (
-    <div
-      className="fixed inset-x-0 bottom-0 top-[var(--app-visual-offset-top,0px)] z-[240] flex h-[var(--app-visual-height,100dvh)] items-end justify-center bg-slate-950/55"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="hazard-help-sheet-title"
-      onMouseDown={onClose}
+    <MobileBottomSheet
+      theme={theme}
+      title="위험 로그 도움말"
+      titleId="hazard-help-sheet-title"
+      description="각 항목이 의미하는 정보를 확인합니다."
+      closeLabel="위험 로그 도움말 닫기"
+      zIndexClassName="z-[240]"
+      overlayClassName="fixed inset-x-0 bottom-0 top-[var(--app-visual-offset-top,0px)] flex h-[var(--app-visual-height,100dvh)] items-end justify-center"
+      sheetClassName={`flex max-h-[82dvh] w-screen flex-col overflow-hidden rounded-t-2xl border-x-0 border-b-0 border-t shadow-2xl ${
+        isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-950'
+      }`}
+      bodyClassName="scrollbar-hidden min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4 text-sm font-bold leading-6"
+      bottomSpacerClassName="h-[calc(env(safe-area-inset-bottom)+16px)]"
+      closeButtonClassName={closeButtonClassName}
+      closeButtonContent="닫기"
+      onBackdropClick={onClose}
+      onClose={onClose}
     >
-      <section
-        className={`flex max-h-[82dvh] w-screen flex-col rounded-t-2xl border-x-0 border-b-0 border-t shadow-2xl ${
-          isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-950'
-        }`}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="flex justify-center px-5 pt-3">
-          <span className={`h-1.5 w-12 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
-        </div>
-        <header className={`flex items-start justify-between gap-3 border-b px-5 py-4 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-          <div className="min-w-0">
-            <h2 id="hazard-help-sheet-title" className="text-base font-black">위험 로그 도움말</h2>
-            <p className={`mt-1 text-xs font-bold ${mutedTextClass}`}>각 항목이 의미하는 정보를 확인합니다.</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className={`min-w-0 whitespace-normal break-keep rounded-md border px-3 py-2 text-xs font-black leading-tight transition ${
-              isDark ? 'border-slate-700 bg-slate-900 hover:bg-slate-800' : 'border-slate-300 bg-white hover:bg-slate-100'
-            }`}
-          >
-            닫기
-          </button>
-        </header>
-        <div className="scrollbar-hidden min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4 text-sm font-bold leading-6">
-          <div className={`rounded-lg border p-4 ${itemClass}`}>
-            <h3 className="font-black">우선순위</h3>
-            <p className={`mt-2 ${mutedTextClass}`}>위험한 정도와 현장 조치 순서를 나타냅니다.</p>
-            <p className="mt-2 font-black">P1 긴급 | P2 위험 | P3 경고 | P4 주의</p>
-            <p className={`mt-2 ${mutedTextClass}`}>등급 뒤 숫자는 시스템이 계산한 점수이며 높을수록 더 위험합니다.</p>
-          </div>
-          <div className={`rounded-lg border p-4 ${itemClass}`}>
-            <h3 className="font-black">대상</h3>
-            <p className={`mt-2 ${mutedTextClass}`}>위험이 발생한 SWMM node/link 또는 편집 객체 ID입니다.</p>
-          </div>
-          <div className={`rounded-lg border p-4 ${itemClass}`}>
-            <h3 className="font-black">내용</h3>
-            <p className={`mt-2 ${mutedTextClass}`}>위험 판정 이유와 주요 수치를 사람이 읽기 쉬운 형태로 표시합니다.</p>
-          </div>
-          <div className={`rounded-lg border p-4 ${itemClass}`}>
-            <h3 className="font-black">유형</h3>
-            <p className={`mt-2 ${mutedTextClass}`}>위험 종류를 현장 용어로 바꿔 표시합니다.</p>
-          </div>
-        </div>
-        <div className="h-[calc(env(safe-area-inset-bottom)+16px)] shrink-0" aria-hidden="true" />
-      </section>
-    </div>
+      <div className={`rounded-lg border p-4 ${itemClass}`}>
+        <h3 className="font-black">우선순위</h3>
+        <p className={`mt-2 ${mutedTextClass}`}>위험한 정도와 현장 조치 순서를 나타냅니다.</p>
+        <p className="mt-2 font-black">P1 긴급 | P2 위험 | P3 경고 | P4 주의</p>
+        <p className={`mt-2 ${mutedTextClass}`}>등급 뒤 숫자는 시스템이 계산한 점수이며 높을수록 더 위험합니다.</p>
+      </div>
+      <div className={`rounded-lg border p-4 ${itemClass}`}>
+        <h3 className="font-black">대상</h3>
+        <p className={`mt-2 ${mutedTextClass}`}>위험이 발생한 SWMM node/link 또는 편집 객체 ID입니다.</p>
+      </div>
+      <div className={`rounded-lg border p-4 ${itemClass}`}>
+        <h3 className="font-black">내용</h3>
+        <p className={`mt-2 ${mutedTextClass}`}>위험 판정 이유와 주요 수치를 사람이 읽기 쉬운 형태로 표시합니다.</p>
+      </div>
+      <div className={`rounded-lg border p-4 ${itemClass}`}>
+        <h3 className="font-black">유형</h3>
+        <p className={`mt-2 ${mutedTextClass}`}>위험 종류를 현장 용어로 바꿔 표시합니다.</p>
+      </div>
+    </MobileBottomSheet>
   )
+}
+
+function SheetCloseButtonContent() {
+  return <span className="inline-flex h-full w-full items-center justify-center leading-none">닫기</span>
 }
 
 function HazardActionSheet({
@@ -292,9 +283,13 @@ function HazardActionSheet({
   const [resultDetail, setResultDetail] = useState('')
   const [recurrenceNote, setRecurrenceNote] = useState('')
   const isCompleteStep = detail.status === 'IN_PROGRESS'
+  const theme = isDark ? 'dark' : 'light'
   const fieldClass = isDark
     ? 'border-slate-700 bg-slate-950 text-slate-100 focus:border-sky-400 focus:ring-sky-900/40'
     : 'border-slate-300 bg-white text-slate-950 focus:border-sky-500 focus:ring-sky-100'
+  const closeButtonClassName = `inline-flex h-10 min-w-16 shrink-0 items-center justify-center rounded-md border px-3 text-center text-sm font-black leading-none transition ${
+    isDark ? 'border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+  }`
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -302,111 +297,91 @@ function HazardActionSheet({
   }
 
   return (
-    <div
-      className="fixed inset-x-0 bottom-0 top-[var(--app-visual-offset-top,0px)] z-[240] flex h-[var(--app-visual-height,100dvh)] items-end justify-center bg-slate-950/55"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="hazard-action-sheet-title"
-      onMouseDown={onClose}
+    <MobileBottomSheet
+      theme={theme}
+      title="위험 로그 조치"
+      titleId="hazard-action-sheet-title"
+      description={<span className="line-clamp-2">{formatHazardDetail(detail.hazardDetail)}</span>}
+      closeLabel="위험 로그 조치 닫기"
+      zIndexClassName="z-[240]"
+      overlayClassName="fixed inset-x-0 bottom-0 top-[var(--app-visual-offset-top,0px)] flex h-[var(--app-visual-height,100dvh)] items-end justify-center"
+      sheetClassName={`flex max-h-[88dvh] w-screen flex-col overflow-hidden rounded-t-2xl border-x-0 border-b-0 border-t shadow-2xl ${
+        isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-950'
+      }`}
+      bodyClassName="scrollbar-hidden min-h-0 flex-1 overflow-y-auto px-5 py-4"
+      bottomSpacerClassName="h-[calc(env(safe-area-inset-bottom)+16px)]"
+      closeButtonClassName={closeButtonClassName}
+      closeButtonContent={<SheetCloseButtonContent />}
+      onBackdropClick={onClose}
+      onClose={onClose}
     >
-      <section
-        className={`flex max-h-[88dvh] w-screen flex-col rounded-t-2xl border-x-0 border-b-0 border-t shadow-2xl ${
-          isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-950'
-        }`}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="flex justify-center px-5 pt-3">
-          <span className={`h-1.5 w-12 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
+      <div className="grid grid-cols-2 gap-2">
+        <div className={`rounded-md border p-3 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}>
+          <div className="text-[10px] font-black uppercase text-slate-500">상태</div>
+          <div className="mt-2"><StatusBadge status={detail.status} /></div>
         </div>
-        <header className={`flex items-start justify-between gap-3 border-b px-5 py-4 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-          <div className="min-w-0">
-            <h2 id="hazard-action-sheet-title" className="text-base font-black">위험 로그 조치</h2>
-            <p className={`mt-1 line-clamp-2 text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              {formatHazardDetail(detail.hazardDetail)}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className={`min-w-0 whitespace-normal break-keep rounded-md border px-3 py-2 text-xs font-black leading-tight transition ${
-              isDark ? 'border-slate-700 bg-slate-900 hover:bg-slate-800' : 'border-slate-300 bg-white hover:bg-slate-100'
-            }`}
-          >
-            닫기
-          </button>
-        </header>
+        <div className={`rounded-md border p-3 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}>
+          <div className="text-[10px] font-black uppercase text-slate-500">우선순위</div>
+          <div className="mt-2 text-sm font-black">{detail.priorityBand} / {detail.priorityScore.toFixed(1)}</div>
+        </div>
+      </div>
+      <div className="mt-3 break-all font-mono text-xs font-bold text-slate-500">{detail.targetId}</div>
 
-        <div className="scrollbar-hidden min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          <div className="grid grid-cols-2 gap-2">
-            <div className={`rounded-md border p-3 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}>
-              <div className="text-[10px] font-black uppercase text-slate-500">상태</div>
-              <div className="mt-2"><StatusBadge status={detail.status} /></div>
-            </div>
-            <div className={`rounded-md border p-3 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}>
-              <div className="text-[10px] font-black uppercase text-slate-500">우선순위</div>
-              <div className="mt-2 text-sm font-black">{detail.priorityBand} / {detail.priorityScore.toFixed(1)}</div>
-            </div>
-          </div>
-          <div className="mt-3 break-all font-mono text-xs font-bold text-slate-500">{detail.targetId}</div>
+      {error ? (
+        <p className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
+          {error}
+        </p>
+      ) : null}
 
-          {error ? (
-            <p className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
-              {error}
-            </p>
-          ) : null}
-
-          <form onSubmit={submit} className="mt-4 space-y-4">
-            {isCompleteStep ? (
-              <>
-                <label className="block">
-                  <span className="text-xs font-black uppercase text-slate-500">결과</span>
-                  <textarea
-                    value={resultDetail}
-                    onChange={(event) => setResultDetail(event.target.value)}
-                    disabled={isSubmitting}
-                    rows={4}
-                    className={`mt-2 w-full rounded-md border px-3 py-2 text-sm font-bold outline-none transition focus:ring-4 ${fieldClass}`}
-                    placeholder="토사 제거 후 수위 안정화"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-black uppercase text-slate-500">재발 시 참고사항</span>
-                  <textarea
-                    value={recurrenceNote}
-                    onChange={(event) => setRecurrenceNote(event.target.value)}
-                    disabled={isSubmitting}
-                    rows={3}
-                    className={`mt-2 w-full rounded-md border px-3 py-2 text-sm font-bold outline-none transition focus:ring-4 ${fieldClass}`}
-                    placeholder="폭우 시 상류 맨홀 우선 점검"
-                  />
-                </label>
-              </>
-            ) : (
-              <label className="block">
-                <span className="text-xs font-black uppercase text-slate-500">조치 내용</span>
-                <textarea
-                  value={actionDetail}
-                  onChange={(event) => setActionDetail(event.target.value)}
-                  disabled={isSubmitting || detail.status === 'RESOLVED'}
-                  rows={4}
-                  className={`mt-2 w-full rounded-md border px-3 py-2 text-sm font-bold outline-none transition focus:ring-4 ${fieldClass}`}
-                  placeholder="하류 관로 현장 점검 진행"
-                />
-              </label>
-            )}
-
-            <button
-              type="submit"
+      <form onSubmit={submit} className="mt-4 space-y-4">
+        {isCompleteStep ? (
+          <>
+            <label className="block">
+              <span className="text-xs font-black uppercase text-slate-500">결과</span>
+              <textarea
+                value={resultDetail}
+                onChange={(event) => setResultDetail(event.target.value)}
+                disabled={isSubmitting}
+                rows={4}
+                className={`mt-2 w-full rounded-md border px-3 py-2 text-base font-bold outline-none transition focus:ring-4 ${fieldClass}`}
+                placeholder="토사 제거 후 수위 안정화"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-black uppercase text-slate-500">재발 시 참고사항</span>
+              <textarea
+                value={recurrenceNote}
+                onChange={(event) => setRecurrenceNote(event.target.value)}
+                disabled={isSubmitting}
+                rows={3}
+                className={`mt-2 w-full rounded-md border px-3 py-2 text-base font-bold outline-none transition focus:ring-4 ${fieldClass}`}
+                placeholder="폭우 시 상류 맨홀 우선 점검"
+              />
+            </label>
+          </>
+        ) : (
+          <label className="block">
+            <span className="text-xs font-black uppercase text-slate-500">조치 내용</span>
+            <textarea
+              value={actionDetail}
+              onChange={(event) => setActionDetail(event.target.value)}
               disabled={isSubmitting || detail.status === 'RESOLVED'}
-              className="h-11 w-full rounded-md border border-sky-600 bg-sky-600 px-4 text-sm font-black text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSubmitting ? '저장 중' : '확인'}
-            </button>
-          </form>
-        </div>
-        <div className="h-[calc(env(safe-area-inset-bottom)+16px)] shrink-0" aria-hidden="true" />
-      </section>
-    </div>
+              rows={4}
+              className={`mt-2 w-full rounded-md border px-3 py-2 text-base font-bold outline-none transition focus:ring-4 ${fieldClass}`}
+              placeholder="하류 관로 현장 점검 진행"
+            />
+          </label>
+        )}
+
+        <button
+          type="submit"
+          disabled={isSubmitting || detail.status === 'RESOLVED'}
+          className="flex h-11 w-full items-center justify-center rounded-md border border-sky-600 bg-sky-600 px-4 text-base font-black leading-none text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isSubmitting ? '저장 중' : '확인'}
+        </button>
+      </form>
+    </MobileBottomSheet>
   )
 }
 
@@ -429,8 +404,6 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
   const [timeSortDirection, setTimeSortDirection] = useState<TimeSortDirection>('desc')
   const seenSocketEventsRef = useRef(new Set<string>())
   const bufferedSocketLogsRef = useRef(new Map<string, HazardLogRecord>())
-  useBodyScrollLock(Boolean(selectedDetail) || isHelpOpen)
-
   useEffect(() => {
     const root = document.documentElement
     const updateVisualViewportVars = () => {
@@ -619,9 +592,13 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
   const activeStatusLabels = STATUS_FILTER_OPTIONS
     .filter((status) => statusFilter[status])
     .map((status) => STATUS_LABELS[status])
-    .join(', ')
+  const activeStatusLabelText = activeStatusLabels.length > 0 ? activeStatusLabels.join(' · ') : '상태 필터 없음'
   const isInitialLoading = isLoading && !hasLoadedLogs
   const isRefreshing = isLoading && hasLoadedLogs
+  const summaryChipClassName = `inline-flex h-7 max-w-full items-center rounded-md border px-2.5 text-[10px] font-black leading-none ${
+    isDark ? 'border-slate-800 bg-slate-950 text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-600'
+  }`
+  const actionButtonClassName = `inline-flex h-10 min-w-[72px] items-center justify-center rounded-md border px-3 text-center text-xs font-black leading-none transition disabled:cursor-wait disabled:opacity-60 ${themeTokens.buttonMuted}`
 
   return (
     <section className={`min-h-screen min-w-0 overflow-hidden ${themeTokens.app}`} data-swmm-theme={theme}>
@@ -636,15 +613,19 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-base font-black">위험 로그</h2>
-            <div className="mt-2 flex gap-2">
-              <span className={`rounded-full px-2 py-1 text-[11px] font-black ${isSocketConnected ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
+              <span className={`${summaryChipClassName} ${
+                isSocketConnected
+                  ? isDark ? 'border-sky-600 bg-sky-950 text-sky-200' : 'border-sky-200 bg-sky-50 text-sky-700'
+                  : ''
+              }`}>
                 {isSocketConnected ? 'WS ON' : 'WS OFF'}
               </span>
-              <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-500">
-                {rows.length} rows
+              <span className={summaryChipClassName}>
+                {rows.length}건
               </span>
-              <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-500">
-                {activeStatusLabels || '상태 필터 없음'}
+              <span className={`${summaryChipClassName} min-w-0 max-w-[150px] truncate`}>
+                {activeStatusLabelText}
               </span>
             </div>
           </div>
@@ -656,7 +637,7 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
                 type="button"
                 onClick={() => void refreshLogs()}
                 disabled={isLoading}
-                className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-black transition disabled:cursor-wait disabled:opacity-60 ${themeTokens.buttonMuted}`}
+                className={actionButtonClassName}
               >
                 {isRefreshing ? <LoadingSpinner /> : null}
                 {isRefreshing ? '불러오는 중' : '새로고침'}
@@ -664,7 +645,7 @@ export function HazardLogsPage({ theme = 'light', renderHeader }: HazardLogsPage
               <button
                 type="button"
                 onClick={() => setIsHelpOpen(true)}
-                className={`rounded-md border px-3 py-2 text-xs font-black transition ${themeTokens.buttonMuted}`}
+                className={actionButtonClassName}
               >
                 도움말
               </button>
