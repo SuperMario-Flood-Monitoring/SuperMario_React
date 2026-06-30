@@ -88,8 +88,8 @@ const RAINFALL_PRESET_OPTIONS = [
   { label: '호우', value: 100 },
   { label: '폭우', value: 500 },
 ] as const
-const RAINFALL_TEST_SLIDER_MAX = 500
-const RAINFALL_TEST_SLIDER_STEP = 10
+// const RAINFALL_TEST_SLIDER_MAX = 500
+// const RAINFALL_TEST_SLIDER_STEP = 10
 const FULLSCREEN_ZOOM_MIN = 1
 const FULLSCREEN_ZOOM_STEP = 0.25
 const FULL_BLOCKAGE_RATIO_THRESHOLD = 0.999999
@@ -163,43 +163,43 @@ function RainfallPresetButtons({
   )
 }
 
-function RainfallTestSlider({
-  value,
-  onChange,
-  isDark,
-}: {
-  value: number
-  onChange: (value: number) => void
-  isDark: boolean
-}) {
-  const clampedValue = Math.max(0, Math.min(RAINFALL_TEST_SLIDER_MAX, Math.round(value)))
-
-  return (
-    <label className="mt-3 block">
-      <div className="flex items-center justify-between">
-        <span className={`text-xs font-black ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>강수 비율</span>
-        <span className={`rounded-full px-2 py-1 text-[11px] font-black ${isDark ? 'bg-slate-950 text-blue-200' : 'bg-white text-slate-700'}`}>
-          {clampedValue}%
-        </span>
-      </div>
-      <input
-        type="range"
-        min={0}
-        max={RAINFALL_TEST_SLIDER_MAX}
-        step={RAINFALL_TEST_SLIDER_STEP}
-        value={clampedValue}
-        onChange={(event) => onChange(Number(event.currentTarget.value))}
-        className="mt-2 w-full accent-blue-600"
-      />
-      <div className={`mt-1 flex items-center justify-between text-[10px] font-black ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-        <span>0</span>
-        <span>10</span>
-        <span>100</span>
-        <span>500</span>
-      </div>
-    </label>
-  )
-}
+// function RainfallTestSlider({
+//   value,
+//   onChange,
+//   isDark,
+// }: {
+//   value: number
+//   onChange: (value: number) => void
+//   isDark: boolean
+// }) {
+//   const clampedValue = Math.max(0, Math.min(RAINFALL_TEST_SLIDER_MAX, Math.round(value)))
+//
+//   return (
+//     <label className="mt-3 block">
+//       <div className="flex items-center justify-between">
+//         <span className={`text-xs font-black ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>강수 비율</span>
+//         <span className={`rounded-full px-2 py-1 text-[11px] font-black ${isDark ? 'bg-slate-950 text-blue-200' : 'bg-white text-slate-700'}`}>
+//           {clampedValue}%
+//         </span>
+//       </div>
+//       <input
+//         type="range"
+//         min={0}
+//         max={RAINFALL_TEST_SLIDER_MAX}
+//         step={RAINFALL_TEST_SLIDER_STEP}
+//         value={clampedValue}
+//         onChange={(event) => onChange(Number(event.currentTarget.value))}
+//         className="mt-2 w-full accent-blue-600"
+//       />
+//       <div className={`mt-1 flex items-center justify-between text-[10px] font-black ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+//         <span>0</span>
+//         <span>10</span>
+//         <span>100</span>
+//         <span>500</span>
+//       </div>
+//     </label>
+//   )
+// }
 
 function PlayIcon() {
   return (
@@ -1381,11 +1381,11 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
                   onChange={setRainfallPercent}
                   isDark={isDark}
                 />
-                <RainfallTestSlider
-                  value={rainfallPercent}
-                  onChange={setRainfallPercent}
-                  isDark={isDark}
-                />
+                {/* <RainfallTestSlider
+                    value={rainfallPercent}
+                    onChange={setRainfallPercent}
+                    isDark={isDark}
+                  /> */}
               </div>
             </section>
 
