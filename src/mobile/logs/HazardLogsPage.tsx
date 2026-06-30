@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react'
 import {
   completeHazardAction,
   getHazardLogDetail,
@@ -282,6 +291,7 @@ function HazardActionSheet({
   const [actionDetail, setActionDetail] = useState('')
   const [resultDetail, setResultDetail] = useState('')
   const [recurrenceNote, setRecurrenceNote] = useState('')
+  const sheetBodyRef = useRef<HTMLDivElement | null>(null)
   const isCompleteStep = detail.status === 'IN_PROGRESS'
   const theme = isDark ? 'dark' : 'light'
   const fieldClass = isDark
@@ -295,6 +305,27 @@ function HazardActionSheet({
     event.preventDefault()
     onSubmit(isCompleteStep ? { resultDetail, recurrenceNote } : { actionDetail })
   }
+
+  const blurFocusedTextarea = useCallback(() => {
+    const activeElement = document.activeElement
+    if (
+      activeElement instanceof HTMLTextAreaElement &&
+      sheetBodyRef.current?.contains(activeElement)
+    ) {
+      activeElement.blur()
+    }
+  }, [])
+
+  const handleSheetPointerDownCapture = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const target = event.target
+    if (!(target instanceof HTMLElement)) {
+      return
+    }
+    if (target.closest('textarea, input, select, button, a, label')) {
+      return
+    }
+    blurFocusedTextarea()
+  }, [blurFocusedTextarea])
 
   return (
     <MobileBottomSheet
@@ -315,72 +346,79 @@ function HazardActionSheet({
       onBackdropClick={onClose}
       onClose={onClose}
     >
-      <div className="grid grid-cols-2 gap-2">
-        <div className={`rounded-md border p-3 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}>
-          <div className="text-[10px] font-black uppercase text-slate-500">상태</div>
-          <div className="mt-2"><StatusBadge status={detail.status} /></div>
+      <div
+        ref={sheetBodyRef}
+        onPointerDownCapture={handleSheetPointerDownCapture}
+        onScrollCapture={blurFocusedTextarea}
+        onTouchMoveCapture={blurFocusedTextarea}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <div className={`rounded-md border p-3 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}>
+            <div className="text-[10px] font-black uppercase text-slate-500">상태</div>
+            <div className="mt-2"><StatusBadge status={detail.status} /></div>
+          </div>
+          <div className={`rounded-md border p-3 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}>
+            <div className="text-[10px] font-black uppercase text-slate-500">우선순위</div>
+            <div className="mt-2 text-sm font-black">{detail.priorityBand} / {detail.priorityScore.toFixed(1)}</div>
+          </div>
         </div>
-        <div className={`rounded-md border p-3 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}>
-          <div className="text-[10px] font-black uppercase text-slate-500">우선순위</div>
-          <div className="mt-2 text-sm font-black">{detail.priorityBand} / {detail.priorityScore.toFixed(1)}</div>
-        </div>
-      </div>
-      <div className="mt-3 break-all font-mono text-xs font-bold text-slate-500">{detail.targetId}</div>
+        <div className="mt-3 break-all font-mono text-xs font-bold text-slate-500">{detail.targetId}</div>
 
-      {error ? (
-        <p className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
-          {error}
-        </p>
-      ) : null}
+        {error ? (
+          <p className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
+            {error}
+          </p>
+        ) : null}
 
-      <form onSubmit={submit} className="mt-4 space-y-4">
-        {isCompleteStep ? (
-          <>
+        <form onSubmit={submit} className="mt-4 space-y-4">
+          {isCompleteStep ? (
+            <>
+              <label className="block">
+                <span className="text-xs font-black uppercase text-slate-500">결과</span>
+                <textarea
+                  value={resultDetail}
+                  onChange={(event) => setResultDetail(event.target.value)}
+                  disabled={isSubmitting}
+                  rows={4}
+                  className={`mt-2 w-full rounded-md border px-3 py-2 text-base font-bold outline-none transition focus:ring-4 ${fieldClass}`}
+                  placeholder="토사 제거 후 수위 안정화"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-black uppercase text-slate-500">재발 시 참고사항</span>
+                <textarea
+                  value={recurrenceNote}
+                  onChange={(event) => setRecurrenceNote(event.target.value)}
+                  disabled={isSubmitting}
+                  rows={3}
+                  className={`mt-2 w-full rounded-md border px-3 py-2 text-base font-bold outline-none transition focus:ring-4 ${fieldClass}`}
+                  placeholder="폭우 시 상류 맨홀 우선 점검"
+                />
+              </label>
+            </>
+          ) : (
             <label className="block">
-              <span className="text-xs font-black uppercase text-slate-500">결과</span>
+              <span className="text-xs font-black uppercase text-slate-500">조치 내용</span>
               <textarea
-                value={resultDetail}
-                onChange={(event) => setResultDetail(event.target.value)}
-                disabled={isSubmitting}
+                value={actionDetail}
+                onChange={(event) => setActionDetail(event.target.value)}
+                disabled={isSubmitting || detail.status === 'RESOLVED'}
                 rows={4}
                 className={`mt-2 w-full rounded-md border px-3 py-2 text-base font-bold outline-none transition focus:ring-4 ${fieldClass}`}
-                placeholder="토사 제거 후 수위 안정화"
+                placeholder="하류 관로 현장 점검 진행"
               />
             </label>
-            <label className="block">
-              <span className="text-xs font-black uppercase text-slate-500">재발 시 참고사항</span>
-              <textarea
-                value={recurrenceNote}
-                onChange={(event) => setRecurrenceNote(event.target.value)}
-                disabled={isSubmitting}
-                rows={3}
-                className={`mt-2 w-full rounded-md border px-3 py-2 text-base font-bold outline-none transition focus:ring-4 ${fieldClass}`}
-                placeholder="폭우 시 상류 맨홀 우선 점검"
-              />
-            </label>
-          </>
-        ) : (
-          <label className="block">
-            <span className="text-xs font-black uppercase text-slate-500">조치 내용</span>
-            <textarea
-              value={actionDetail}
-              onChange={(event) => setActionDetail(event.target.value)}
-              disabled={isSubmitting || detail.status === 'RESOLVED'}
-              rows={4}
-              className={`mt-2 w-full rounded-md border px-3 py-2 text-base font-bold outline-none transition focus:ring-4 ${fieldClass}`}
-              placeholder="하류 관로 현장 점검 진행"
-            />
-          </label>
-        )}
+          )}
 
-        <button
-          type="submit"
-          disabled={isSubmitting || detail.status === 'RESOLVED'}
-          className="flex h-11 w-full items-center justify-center rounded-md border border-sky-600 bg-sky-600 px-4 text-base font-black leading-none text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isSubmitting ? '저장 중' : '확인'}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={isSubmitting || detail.status === 'RESOLVED'}
+            className="flex h-11 w-full items-center justify-center rounded-md border border-sky-600 bg-sky-600 px-4 text-base font-black leading-none text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmitting ? '저장 중' : '확인'}
+          </button>
+        </form>
+      </div>
     </MobileBottomSheet>
   )
 }
