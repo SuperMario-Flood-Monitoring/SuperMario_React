@@ -13,6 +13,7 @@ import {
   getPipePalette,
   getPipeSegmentRotation,
 } from './editorNodeHelpers'
+import { PipeBlockageDebrisSvg } from '../../shared/editor/pipeBlockageVisuals'
 import type { EditorNode } from './editorTypes'
 
 /** 파이프 끝의 커넥터 캡 모양을 렌더링한다. */
@@ -122,6 +123,35 @@ function PipeFlowArrows({ node, palette }: { node: EditorNode; palette: ReturnTy
   )
 }
 
+function PipeBlockageDebris({ node }: { node: EditorNode }) {
+  const blockagePercent = clampNumber(Number(node.props.blockage ?? 0), 0, 100)
+  if (blockagePercent <= 0) {
+    return null
+  }
+
+  const size = getNodePipeSize(node)
+  const innerInset = PIPE_BORDER[size]
+  const orientation = getNodeOrientation(node)
+  const innerX = innerInset
+  const innerY = innerInset
+  const innerWidth = Math.max(0, node.width - innerInset * 2)
+  const innerHeight = Math.max(0, node.height - innerInset * 2)
+  if (innerWidth <= 0 || innerHeight <= 0) {
+    return null
+  }
+
+  return (
+    <PipeBlockageDebrisSvg
+      blockagePercent={blockagePercent}
+      orientation={orientation}
+      innerX={innerX}
+      innerY={innerY}
+      innerWidth={innerWidth}
+      innerHeight={innerHeight}
+    />
+  )
+}
+
 function getPipeLabelWidth(name: string) {
   const weightedLength = Array.from(name).reduce((sum, char) => {
     if (/[가-힣]/.test(char)) {
@@ -200,6 +230,7 @@ export const PipeSegmentNode = memo(function PipeSegmentNode({ node, selected }:
         fill={palette.water}
         opacity="0.24"
       />
+      <PipeBlockageDebris node={node} />
       <PipeFlowArrows node={node} palette={palette} />
       <PipeNameLabel node={node} selected={selected} />
     </>

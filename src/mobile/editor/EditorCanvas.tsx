@@ -170,6 +170,11 @@ import {
   updateSwmmScenario,
   type SwmmScenario,
 } from '../../services/swmm/client'
+import {
+  clearSelectedSwmmScenarioId,
+  loadSelectedSwmmScenarioId,
+  saveSelectedSwmmScenarioId,
+} from '../../services/swmm/scenarioSelectionStorage'
 import { InfoPanelFrame } from '../layout/InfoPanelLayout'
 import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchTheme'
 import { MobileBottomSheet } from '../ui/MobileBottomSheet'
@@ -3507,6 +3512,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     const normalizedLayout = normalizeEditorLayout(scenario.layoutJson)
     replaceLayout(normalizedLayout)
     setSelectedScenario(scenario)
+    saveSelectedSwmmScenarioId(scenario.id)
     setScenarioEditBaseline(normalizedLayout)
     setScenarioCancelBaseline(null)
     setScenarioTitle(scenario.title)
@@ -3515,9 +3521,32 @@ export const EditorCanvas = memo(function EditorCanvas({
     resetEditorInteractionState()
   }, [replaceLayout, resetEditorInteractionState, scenarios])
 
+  useEffect(() => {
+    if (selectedScenario || isScenarioEditMode || scenarios.length === 0) {
+      return
+    }
+
+    const storedScenarioId = loadSelectedSwmmScenarioId()
+    if (!storedScenarioId) {
+      return
+    }
+
+    if (!scenarios.some((scenario) => scenario.id === storedScenarioId)) {
+      clearSelectedSwmmScenarioId()
+      return
+    }
+
+    const timerId = window.setTimeout(() => {
+      selectScenario(storedScenarioId)
+    }, 0)
+
+    return () => window.clearTimeout(timerId)
+  }, [isScenarioEditMode, scenarios, selectScenario, selectedScenario])
+
   const handleScenarioSelect = (scenarioIdValue: string) => {
     const scenarioId = Number(scenarioIdValue)
     if (!scenarioId) {
+      clearSelectedSwmmScenarioId()
       setSelectedScenario(null)
       setScenarioEditBaseline(null)
       setScenarioCancelBaseline(null)
@@ -3534,6 +3563,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     const nextLayout = normalizeEditorLayout(createDefaultEditorLayout())
     setScenarioCancelBaseline(normalizeEditorLayout(layout))
     replaceLayout(nextLayout)
+    clearSelectedSwmmScenarioId()
     setSelectedScenario(null)
     setScenarioEditBaseline(nextLayout)
     setScenarioTitle('새 시나리오')
@@ -3615,6 +3645,7 @@ export const EditorCanvas = memo(function EditorCanvas({
           })
 
       setSelectedScenario(savedScenario)
+      saveSelectedSwmmScenarioId(savedScenario.id)
       setScenarioEditBaseline(normalizeEditorLayout(savedScenario.layoutJson))
       setScenarioCancelBaseline(null)
       setScenarioTitle(savedScenario.title)
@@ -3719,11 +3750,11 @@ export const EditorCanvas = memo(function EditorCanvas({
       }
 
       const startsAtGroundSurface = Math.abs(node.y - layout.groundSurfaceY) <= 1
-      if (!startsAtGroundSurface || node.x <= 0) {
+      if (!startsAtGroundSurface) {
         return leftMostTerrainX
       }
 
-      return Math.min(leftMostTerrainX, node.x)
+      return Math.min(leftMostTerrainX, Math.max(0, node.x))
     }, canvasWidth)
     const firstBottomTerrainY = layout.nodes.reduce((topMostTerrainY, node) => {
       if (node.type !== 'terrain') {
@@ -3746,6 +3777,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   }, [canvasHeight, canvasWidth, layout.groundSurfaceY, layout.nodes])
   const baseGroundWidth = Math.max(0, baseGroundBounds.right - baseGroundBounds.left)
   const baseGroundHeight = Math.max(0, baseGroundBounds.bottom - baseGroundBounds.top)
+  const hasVisibleBaseGround = baseGroundWidth > 1 && baseGroundHeight > 1
 
   // 선택된 노드에 연결된 relation/link 목록은 포트 색상과 오른쪽 패널 표시에서 사용한다.
   const selectedConnectedLinks = useMemo(() => {
@@ -4236,10 +4268,10 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   const handleLinkSelect = useCallback((linkId: string) => {
     setSelection({ kind: 'link', id: linkId })
-    if (!isMobileInput) {
+    if (!isMobileInput || isScenarioReadOnly) {
       setIsEditorInfoPanelOpen(true)
     }
-  }, [isMobileInput])
+  }, [isMobileInput, isScenarioReadOnly])
 
   // 복사/붙여넣기는 현재 선택을 relation 그룹 단위로 확장한 뒤 새 ID로 복제한다.
   const copySelection = useCallback(() => {
@@ -4476,58 +4508,6 @@ export const EditorCanvas = memo(function EditorCanvas({
     })
   }, [blockReadOnlyScenarioAction, clearLongPressTimer])
 
-  const openMobileBaseGroundActionMenu = useCallback((
-    point: Point,
-  ) => {
-    clearLongPressTimer()
-    setIsEditorInfoPanelOpen(false)
-    setMobileQuickEditNodeId(null)
-    setPendingPort(null)
-    setAttachTargetNodeId(null)
-    setCoordinateEditState(null)
-    setDragState(null)
-    setDragDraftPositionsByNodeId(null)
-    setResizeState(null)
-    setResizeDraftNodesById(null)
-    setMarqueeSelectionState(null)
-    setRelationPreviewNodeId(null)
-    mobileMoveArmedNodeIdRef.current = null
-    setMobileMoveArmedNodeId(null)
-    setMobileEditorMode('idle')
-
-    const materializedGroundId = `terrain_ground_${Date.now()}_${nextNodeIndex}`
-    const materializedGroundNode = normalizeNodePorts({
-      id: materializedGroundId,
-      swmmId: materializedGroundId,
-      name: `땅 ${nextNodeIndex}`,
-      type: 'terrain',
-      x: baseGroundBounds.left,
-      y: baseGroundBounds.top,
-      width: Math.max(MIN_TERRAIN_WIDTH, baseGroundWidth),
-      height: Math.max(MIN_TERRAIN_HEIGHT, baseGroundHeight),
-      ports: createEditorPorts('terrain', Math.max(MIN_TERRAIN_WIDTH, baseGroundWidth), Math.max(MIN_TERRAIN_HEIGHT, baseGroundHeight)),
-      props: { terrainKind: 'ground' },
-    })
-
-    setLayout((currentLayout) => ({
-      ...currentLayout,
-      nodes: [...currentLayout.nodes, materializedGroundNode],
-    }))
-    setSelection({ kind: 'node', id: materializedGroundId })
-    setMobileActiveNodeId(materializedGroundId)
-    setContextMenu(null)
-    setMobileQuickEditNodeId(materializedGroundId)
-    setMobileQuickEditPanel(null)
-    setMobileQuickEditAnchorPoint(point)
-  }, [baseGroundBounds, baseGroundHeight, baseGroundWidth, clearLongPressTimer, nextNodeIndex, setLayout])
-
-  const isPointInsideBaseGround = useCallback((point: Point) => (
-    point.x >= baseGroundBounds.left &&
-    point.x <= baseGroundBounds.right &&
-    point.y >= baseGroundBounds.top &&
-    point.y <= baseGroundBounds.bottom
-  ), [baseGroundBounds])
-
   const handleCanvasPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (event.button !== 0) {
       return
@@ -4572,13 +4552,6 @@ export const EditorCanvas = memo(function EditorCanvas({
         clearLongPressTimer()
         setContextMenu(null)
         setMobileQuickEditNodeId(null)
-        return
-      }
-
-      if (isMobileInput && isPointInsideBaseGround(cursor)) {
-        event.preventDefault()
-        setMobileQuickEditNodeId(null)
-        openMobileBaseGroundActionMenu(cursor)
         return
       }
 
@@ -4668,6 +4641,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
     if (isScenarioReadOnly) {
       setSelection({ kind: 'node', id: node.id })
+      setIsEditorInfoPanelOpen(true)
       setContextMenu(null)
       setMobileQuickEditNodeId(null)
       return
@@ -5393,6 +5367,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
     if (isScenarioReadOnly) {
       setSelection({ kind: 'node', id: node.id })
+      setIsEditorInfoPanelOpen(true)
       setContextMenu(null)
       setMobileQuickEditNodeId(null)
       return
@@ -5614,6 +5589,7 @@ export const EditorCanvas = memo(function EditorCanvas({
 
     if (isScenarioReadOnly) {
       setSelection({ kind: 'node', id: node.id })
+      setIsEditorInfoPanelOpen(true)
       return
     }
 
@@ -5667,6 +5643,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     event.stopPropagation()
     if (isScenarioReadOnly) {
       setSelection({ kind: 'node', id: nodeId })
+      setIsEditorInfoPanelOpen(true)
       setContextMenu(null)
       return
     }
@@ -5878,6 +5855,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     }
 
     clearEditorLayout()
+    clearSelectedSwmmScenarioId()
     setSelectedScenario(null)
     setScenarioEditBaseline(null)
     setScenarioTitle('')
@@ -5904,6 +5882,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     if (isEditorLayout(parsedValue)) {
       const importedLayout = normalizeEditorLayout(parsedValue)
       replaceLayout(importedLayout)
+      clearSelectedSwmmScenarioId()
       setSelectedScenario(null)
       setScenarioEditBaseline(importedLayout)
       setScenarioTitle('가져온 시나리오')
@@ -6260,8 +6239,9 @@ export const EditorCanvas = memo(function EditorCanvas({
                 <h3 className="text-sm font-black text-slate-800">여러 객체 선택</h3>
                 <button
                   type="button"
+                  disabled={isScenarioReadOnly}
                   onClick={deleteSelection}
-                  className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-black text-rose-700 hover:bg-white"
+                  className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-black text-rose-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   삭제
                 </button>
@@ -6274,6 +6254,7 @@ export const EditorCanvas = memo(function EditorCanvas({
           ) : (
             <SelectionPanel
               theme={theme}
+              readOnly={isScenarioReadOnly}
               node={selectedNode}
               link={selectedLink}
               connectedLinks={selectedConnectedLinks}
@@ -7753,14 +7734,16 @@ export const EditorCanvas = memo(function EditorCanvas({
             onPointerCancel={finishPointerInteraction}
             onPointerLeave={handleCanvasPointerLeave}
           >
-            <SoilBackground
-              minX={baseGroundBounds.left}
-              topY={baseGroundBounds.top}
-              width={baseGroundWidth}
-              height={baseGroundHeight}
-              skyHeight={layout.groundSurfaceY}
-            />
-            {isMobileInput && contextMenu?.baseGround ? (
+            {hasVisibleBaseGround ? (
+              <SoilBackground
+                minX={baseGroundBounds.left}
+                topY={baseGroundBounds.top}
+                width={baseGroundWidth}
+                height={baseGroundHeight}
+                skyHeight={layout.groundSurfaceY}
+              />
+            ) : null}
+            {hasVisibleBaseGround && isMobileInput && contextMenu?.baseGround ? (
               <g pointerEvents="none">
                 <rect
                   x={baseGroundBounds.left + 5}
@@ -7842,10 +7825,12 @@ export const EditorCanvas = memo(function EditorCanvas({
                       </g>
                     )
                   })}
-                  <MobileLayoutAddEdgeButtons
-                    bounds={baseGroundBounds}
-                    onPointerDown={handleBaseLayoutAddPointerDown}
-                  />
+                  {hasVisibleBaseGround ? (
+                    <MobileLayoutAddEdgeButtons
+                      bounds={baseGroundBounds}
+                      onPointerDown={handleBaseLayoutAddPointerDown}
+                    />
+                  ) : null}
                 </g>
               ) : (
                 <g>
@@ -7861,10 +7846,12 @@ export const EditorCanvas = memo(function EditorCanvas({
                       </g>
                     )
                   })}
-                  <LayoutAddHandles
-                    bounds={baseGroundBounds}
-                    onPointerDown={handleBaseLayoutAddPointerDown}
-                  />
+                  {hasVisibleBaseGround ? (
+                    <LayoutAddHandles
+                      bounds={baseGroundBounds}
+                      onPointerDown={handleBaseLayoutAddPointerDown}
+                    />
+                  ) : null}
                 </g>
               )}
 

@@ -110,6 +110,7 @@ export function buildSwmmRuntimeControl(
 
   return {
     rainfallRatio: clampRainfallPercent(rainfallPercent),
+    rainfallPercent: clampRainfallPercent(rainfallPercent),
     blockagesById,
     speedMultiplier: Math.max(1, Math.min(10, Math.round(numericControlValue(speedMultiplier) || 1))),
   }

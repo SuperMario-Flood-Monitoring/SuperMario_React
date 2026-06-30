@@ -19,6 +19,50 @@ function getRelationMarkerId(link: EditorLinkModel, selected: boolean) {
   return `relation-arrow-${getSvgSafeId(link.id)}-${selected ? 'selected' : 'normal'}`
 }
 
+function LinkBlockageDebris({
+  link,
+  path,
+  thickness,
+}: {
+  link: EditorLinkModel
+  path: string
+  thickness: number
+}) {
+  const blockagePercent = clampNumber(Number(link.props.blockage ?? 0), 0, 100)
+  if (blockagePercent <= 0) {
+    return null
+  }
+
+  const ratio = blockagePercent / 100
+  const debrisStrokeWidth = clampNumber(thickness * (0.32 + ratio * 0.5), 4, Math.max(4, thickness * 0.86))
+  const debrisDashLength = 18
+  const debrisGapLength = 18
+
+  return (
+    <g pointerEvents="none" opacity={clampNumber(0.42 + ratio * 0.36, 0.42, 0.82)}>
+      <path
+        d={path}
+        fill="none"
+        stroke="#7c2d12"
+        strokeWidth={debrisStrokeWidth}
+        strokeDasharray={`${debrisDashLength} ${debrisGapLength}`}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d={path}
+        fill="none"
+        stroke="#451a03"
+        strokeWidth={Math.max(2, debrisStrokeWidth * 0.36)}
+        strokeDasharray={`${Math.max(4, Math.round(debrisDashLength * 0.34))} ${debrisGapLength + debrisDashLength}`}
+        strokeDashoffset={Math.round(debrisDashLength * 0.46)}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </g>
+  )
+}
+
 type EditableLinkShapeProps = EditorLinkRenderItem & {
   selected: boolean
   onSelect: (linkId: string) => void
@@ -126,6 +170,7 @@ const EditableLinkShape = memo(function EditableLinkShape({
         strokeDasharray="24 22"
         strokeLinecap="round"
       />
+      <LinkBlockageDebris link={link} path={path} thickness={thickness} />
       <text
         x={labelX}
         y={labelY}

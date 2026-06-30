@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer } from 'react'
 import { createDefaultEditorLayout } from './defaultLayout'
 import { LAYOUT_HISTORY_LIMIT } from './editorDefinitions'
 import { normalizeRelationAttachments } from './editorRelations'
-import { loadEditorLayout, saveEditorLayout } from './layoutStorage'
+import { saveEditorLayout } from './layoutStorage'
 import type {
   LayoutHistoryAction,
   LayoutHistoryState,
@@ -193,10 +193,10 @@ function pushLimitedHistory(history: EditorLayout[], layout: EditorLayout) {
   return [...history, layout].slice(-LAYOUT_HISTORY_LIMIT)
 }
 
-/** localStorage 또는 기본 layout으로 history 초기 상태를 만든다. */
+/** 새 편집 화면은 자동 저장본을 복원하지 않고 기본 layout에서 시작한다. */
 function createInitialLayoutHistoryState(normalizeLayout: NormalizeLayout): LayoutHistoryState {
   return {
-    present: normalizeLayout(loadEditorLayout() ?? createDefaultEditorLayout()),
+    present: normalizeLayout(createDefaultEditorLayout()),
     past: [],
     future: [],
     batchStart: null,

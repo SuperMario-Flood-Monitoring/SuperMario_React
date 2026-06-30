@@ -63,6 +63,7 @@ export function SummaryCard({
 /** 선택된 노드 또는 링크의 속성을 수정하는 편집 패널을 렌더링한다. */
 export function SelectionPanel({
   theme = 'light',
+  readOnly = false,
   node,
   link,
   connectedLinks,
@@ -73,6 +74,7 @@ export function SelectionPanel({
   onDeleteSelection,
 }: {
   theme?: WorkbenchTheme
+  readOnly?: boolean
   node: EditorNode | null
   link: EditorLink | null
   connectedLinks: EditorLink[]
@@ -96,6 +98,7 @@ export function SelectionPanel({
   const orangeNoticeClassName = isDark
     ? 'bg-orange-500/10 text-orange-200'
     : 'bg-orange-50 text-orange-700'
+  const disabledButtonClassName = 'disabled:cursor-not-allowed disabled:opacity-50'
 
   if (node) {
     const isSurfaceNode = SURFACE_NODE_TYPES.has(node.type)
@@ -141,21 +144,30 @@ export function SelectionPanel({
           <h3 className="text-sm font-black">선택 객체</h3>
           <button
             type="button"
+            disabled={readOnly}
             onClick={onDeleteSelection}
-            className={`rounded-md border px-2 py-1 text-xs font-black ${deleteButtonClassName}`}
+            className={`rounded-md border px-2 py-1 text-xs font-black ${deleteButtonClassName} ${disabledButtonClassName}`}
           >
             삭제
           </button>
         </div>
 
+        {readOnly ? (
+          <p className={`mt-3 rounded-md px-2 py-2 text-xs font-bold leading-5 ${orangeNoticeClassName}`}>
+            시나리오 수정 버튼을 누르기 전까지 편집할 수 없습니다.
+          </p>
+        ) : null}
+
         <TextField
           theme={theme}
+          disabled={readOnly}
           label="화면 이름"
           value={node.name}
           onChange={(value) => onUpdateNode(node.id, { name: value })}
         />
         <TextField
           theme={theme}
+          disabled={readOnly}
           label="SWMM ID"
           value={node.swmmId}
           onChange={(value) => onUpdateNode(node.id, { swmmId: value })}
@@ -195,6 +207,7 @@ export function SelectionPanel({
               value={clampPercent(node.props.blockage)}
               min={0}
               max={100}
+              disabled={readOnly}
               onChange={(value) => onUpdateNode(node.id, {
                 props: {
                   ...node.props,
@@ -210,20 +223,21 @@ export function SelectionPanel({
             theme={theme}
             label="x"
             value={node.x}
-            disabled={isPositionLockedPipe || isTerrainPositionLocked}
+            disabled={readOnly || isPositionLockedPipe || isTerrainPositionLocked}
             onChange={(value) => onUpdateNode(node.id, { x: value })}
           />
           <NumberField
             theme={theme}
             label="y"
             value={node.y}
-            disabled={isYLocked || isPositionLockedPipe || isTerrainPositionLocked}
+            disabled={readOnly || isYLocked || isPositionLockedPipe || isTerrainPositionLocked}
             onChange={(value) => onUpdateNode(node.id, { y: value })}
           />
           <NumberField
             theme={theme}
             label="가로"
             value={node.width}
+            disabled={readOnly}
             onChange={(value) => onUpdateNode(node.id, { width: Math.max(minNodeWidth, value) })}
           />
           <NumberField
@@ -231,7 +245,7 @@ export function SelectionPanel({
             label="세로"
             value={node.height}
             min={minNodeHeight}
-            disabled={node.type === 'road'}
+            disabled={readOnly || node.type === 'road'}
             onChange={(value) => onUpdateNode(node.id, { height: Math.max(minNodeHeight, value) })}
           />
         </div>
@@ -285,21 +299,30 @@ export function SelectionPanel({
           <h3 className="text-sm font-black">선택 링크</h3>
           <button
             type="button"
+            disabled={readOnly}
             onClick={onDeleteSelection}
-            className={`rounded-md border px-2 py-1 text-xs font-black ${deleteButtonClassName}`}
+            className={`rounded-md border px-2 py-1 text-xs font-black ${deleteButtonClassName} ${disabledButtonClassName}`}
           >
             삭제
           </button>
         </div>
 
+        {readOnly ? (
+          <p className={`mt-3 rounded-md px-2 py-2 text-xs font-bold leading-5 ${orangeNoticeClassName}`}>
+            시나리오 수정 버튼을 누르기 전까지 편집할 수 없습니다.
+          </p>
+        ) : null}
+
         <TextField
           theme={theme}
+          disabled={readOnly}
           label="화면 이름"
           value={link.name}
           onChange={(value) => onUpdateLink(link.id, { name: value })}
         />
         <TextField
           theme={theme}
+          disabled={readOnly}
           label="SWMM ID"
           value={link.swmmId}
           onChange={(value) => onUpdateLink(link.id, { swmmId: value })}
@@ -310,6 +333,7 @@ export function SelectionPanel({
           label="링크 종류"
           value={link.type}
           options={LINK_TYPE_OPTIONS}
+          disabled={readOnly}
           onChange={(value) => onUpdateLink(link.id, { type: value as EditorLinkType })}
         />
         <SelectField
@@ -317,6 +341,7 @@ export function SelectionPanel({
           label="관 크기"
           value={link.size}
           options={PIPE_SIZE_OPTIONS}
+          disabled={readOnly}
           onChange={(value) => onUpdateLink(link.id, { size: value as EditorPipeSize })}
         />
         {hasPipeKind && (
@@ -326,6 +351,7 @@ export function SelectionPanel({
             value={pipeKind}
             options={PIPE_KIND_OPTIONS}
             optionLabels={PIPE_KIND_LABELS}
+            disabled={readOnly}
             onChange={(value) => onUpdateLinkProps(link.id, { pipeKind: value })}
           />
         )}
@@ -334,6 +360,7 @@ export function SelectionPanel({
           label="경로"
           value={link.props.route}
           options={LINK_ROUTE_OPTIONS}
+          disabled={readOnly}
           onChange={(value) => onUpdateLinkProps(link.id, { route: value as EditorLink['props']['route'] })}
         />
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -341,12 +368,14 @@ export function SelectionPanel({
             theme={theme}
             label="경사"
             value={link.props.slope}
+            disabled={readOnly}
             onChange={(value) => onUpdateLinkProps(link.id, { slope: value })}
           />
           <NumberField
             theme={theme}
             label="길이"
             value={link.props.length}
+            disabled={readOnly}
             onChange={(value) => onUpdateLinkProps(link.id, { length: value })}
           />
           <NumberField
@@ -355,6 +384,7 @@ export function SelectionPanel({
             value={link.props.blockage}
             min={0}
             max={100}
+            disabled={readOnly}
             onChange={(value) => onUpdateLinkProps(link.id, { blockage: Math.min(100, Math.max(0, value)) })}
           />
         </div>
@@ -390,11 +420,13 @@ function TextField({
   theme = 'light',
   label,
   value,
+  disabled = false,
   onChange,
 }: {
   theme?: WorkbenchTheme
   label: string
   value: string
+  disabled?: boolean
   onChange: (value: string) => void
 }) {
   const isDark = theme === 'dark'
@@ -404,9 +436,10 @@ function TextField({
       <span className={`text-xs font-black ${isDark ? 'text-slate-400' : 'text-slate-400'}`}>{label}</span>
       <input
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className={`mt-1 w-full rounded-md border px-2 py-2 text-sm font-bold outline-none focus:border-blue-400 ${
-          isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-200 bg-white text-slate-700'
+        className={`mt-1 w-full rounded-md border px-2 py-2 text-sm font-bold outline-none focus:border-blue-400 disabled:cursor-not-allowed disabled:text-slate-400 ${
+          isDark ? 'border-slate-700 bg-slate-950 text-slate-100 disabled:bg-slate-900' : 'border-slate-200 bg-white text-slate-700 disabled:bg-slate-100'
         }`}
       />
     </label>

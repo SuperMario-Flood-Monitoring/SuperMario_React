@@ -20,6 +20,7 @@ import {
 } from '../editor/editorNodeHelpers'
 import type { SwmmRealtimeSnapshot } from '../../services/swmm/client'
 import { SoilBackground } from '../diagram/SoilBackground'
+import { PipeBlockageDebrisSvg } from '../../shared/editor/pipeBlockageVisuals'
 
 export interface SimulationBlockageTarget {
   swmmLinkId: string
@@ -94,11 +95,14 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function getWeatherPresetLabel(rainfallPercent: number) {
-  if (rainfallPercent >= 200) {
+  if (rainfallPercent > 100) {
     return '폭우'
   }
-  if (rainfallPercent > 0) {
-    return '비옴'
+  if (rainfallPercent >= 100) {
+    return '호우'
+  }
+  if (rainfallPercent >= 10) {
+    return '우천'
   }
   return '맑음'
 }
@@ -164,6 +168,23 @@ function clamp01(value: number | undefined) {
   }
 
   return Math.max(0, Math.min(1, value))
+}
+
+function getEditorBlockageRatio(node: EditorNode) {
+  const blockagePercent = Number(node.props.blockage ?? 0)
+  if (!Number.isFinite(blockagePercent)) {
+    return 0
+  }
+
+  return clamp01(blockagePercent / 100)
+}
+
+function getVisibleBlockageRatio(node: EditorNode, state: RuntimeObjectState | undefined) {
+  if (state && state.maxBlockageRatio !== undefined) {
+    return clamp01(state.maxBlockageRatio)
+  }
+
+  return getEditorBlockageRatio(node)
 }
 
 /** SVG clipPath/filter id로 안전하게 사용할 수 있는 문자열로 변환한다. */
@@ -322,13 +343,16 @@ function getObjectLabelWidth(name: string) {
 }
 
 function getObjectStatusPercent(node: EditorNode, state: RuntimeObjectState | undefined) {
-  if (!state || node.type === 'road') {
+  if (node.type === 'road') {
     return null
   }
 
-  const fullnessRatio = getNodeBadgeRatio(node, state)
-  const blockageRatio = clamp01(state.maxBlockageRatio)
+  const fullnessRatio = state ? getNodeBadgeRatio(node, state) : 0
+  const blockageRatio = getVisibleBlockageRatio(node, state)
   const hasBlockage = blockageRatio > 0
+  if (!state && !hasBlockage) {
+    return null
+  }
 
   return {
     text: formatBadgePercent(hasBlockage ? blockageRatio : fullnessRatio),
@@ -1060,7 +1084,7 @@ function RuntimeOutline({ node, state, selected }: { node: EditorNode; state?: R
     ) : null
   }
 
-  const blockage = clamp01(state?.maxBlockageRatio)
+  const blockage = getVisibleBlockageRatio(node, state)
   const fillRatio = getNodeBadgeRatio(node, state)
   const riskStroke = getRiskStrokeColor(fillRatio)
   const flooded = hasVisibleFlooding(node, state)
@@ -1372,12 +1396,14 @@ function PipeSegmentNode({
   const innerWidth = Math.max(0, node.width - innerInset * 2)
   const innerHeight = Math.max(0, node.height - innerInset * 2)
   const orientation = getNodeOrientation(node)
-  const blockageRatio = clamp01(state?.maxBlockageRatio)
-  const openRatio = Math.max(0, 1 - blockageRatio)
-  const flowWidth = orientation === 'horizontal' ? innerWidth : innerWidth * openRatio
-  const flowHeight = orientation === 'horizontal' ? innerHeight * openRatio : innerHeight
-  const flowX = innerInset + (innerWidth - flowWidth) / 2
-  const flowY = innerInset + (innerHeight - flowHeight) / 2
+  const blockageRatio = getVisibleBlockageRatio(node, state)
+  const blockedCrossAxis = orientation === 'horizontal'
+    ? innerHeight * blockageRatio
+    : innerWidth * blockageRatio
+  const flowWidth = orientation === 'horizontal' ? innerWidth : Math.max(0, innerWidth - blockedCrossAxis)
+  const flowHeight = orientation === 'horizontal' ? Math.max(0, innerHeight - blockedCrossAxis) : innerHeight
+  const flowX = orientation === 'horizontal' ? innerInset : innerInset + blockedCrossAxis
+  const flowY = innerInset
   const runtimeRatio = getRuntimeFillRatio(state)
   const ratio = runtimeRatio > PIPE_VISIBLE_FILL_THRESHOLD ? Math.max(runtimeRatio, PIPE_VISIBLE_FILL_MIN) : 0
   const flowConfig = getFlowAnimationConfig(state, reverseFlowThreshold)
@@ -1392,21 +1418,6 @@ function PipeSegmentNode({
           <rect x={flowX} y={flowY} width={flowWidth} height={flowHeight} />
         </clipPath>
       </defs>
-      {hasBlockage ? (
-        orientation === 'horizontal' ? (
-          <>
-            <rect x={innerInset} y={innerInset} width={innerWidth} height={Math.max(0, flowY - innerInset)} fill="#7f1d1d" opacity={0.18 + blockageRatio * 0.58} />
-            <rect x={innerInset} y={flowY + flowHeight} width={innerWidth} height={Math.max(0, innerInset + innerHeight - flowY - flowHeight)} fill="#7f1d1d" opacity={0.18 + blockageRatio * 0.58} />
-            <rect x={node.width / 2 - 6} y={innerInset} width="12" height={innerHeight} rx="3" fill="#ef4444" opacity={0.18 + blockageRatio * 0.62} />
-          </>
-        ) : (
-          <>
-            <rect x={innerInset} y={innerInset} width={Math.max(0, flowX - innerInset)} height={innerHeight} fill="#7f1d1d" opacity={0.18 + blockageRatio * 0.58} />
-            <rect x={flowX + flowWidth} y={innerInset} width={Math.max(0, innerInset + innerWidth - flowX - flowWidth)} height={innerHeight} fill="#7f1d1d" opacity={0.18 + blockageRatio * 0.58} />
-            <rect x={innerInset} y={node.height / 2 - 6} width={innerWidth} height="12" rx="3" fill="#ef4444" opacity={0.18 + blockageRatio * 0.62} />
-          </>
-        )
-      ) : null}
       <WaterFillRect
         id={node.id}
         x={flowX}
@@ -1425,6 +1436,16 @@ function PipeSegmentNode({
         reverseFlowThreshold={reverseFlowThreshold}
         animationSpeedMultiplier={animationSpeedMultiplier}
       />
+      {hasBlockage ? (
+        <PipeBlockageDebrisSvg
+          blockagePercent={blockageRatio * 100}
+          orientation={orientation}
+          innerX={innerInset}
+          innerY={innerInset}
+          innerWidth={innerWidth}
+          innerHeight={innerHeight}
+        />
+      ) : null}
     </>
   )
 }

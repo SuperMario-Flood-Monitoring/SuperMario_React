@@ -31,6 +31,11 @@ import {
   type SwmmScenario,
 } from '../../services/swmm/client'
 import {
+  clearSelectedSwmmScenarioId,
+  loadSelectedSwmmScenarioId,
+  saveSelectedSwmmScenarioId,
+} from '../../services/swmm/scenarioSelectionStorage'
+import {
   asSwmmRuntimeMapping,
   buildSwmmRuntimeControl,
   clampPercent,
@@ -66,7 +71,7 @@ interface RuntimeReport {
 
 type BlockageTarget = NonNullable<NonNullable<RuntimeReport['dynamicControls']>['blockageTargets']>[number]
 
-type SimulationLayoutSource = 'localStorage' | 'default' | 'scenario'
+type SimulationLayoutSource = 'localStorage' | 'default' | 'scenario' | 'imported'
 
 interface LoadedSimulationLayout {
   layout: EditorLayout
@@ -79,9 +84,12 @@ interface LoadedSimulationLayout {
 const SIMULATION_SPEED_OPTIONS = [1, 2, 3, 4, 10] as const
 const RAINFALL_PRESET_OPTIONS = [
   { label: '맑음', value: 0 },
-  { label: '비옴', value: 100 },
+  { label: '우천', value: 10 },
+  { label: '호우', value: 100 },
   { label: '폭우', value: 300 },
 ] as const
+const RAINFALL_TEST_SLIDER_MAX = 300
+const RAINFALL_TEST_SLIDER_STEP = 10
 const FULLSCREEN_ZOOM_MIN = 1
 const FULLSCREEN_ZOOM_STEP = 0.25
 
@@ -189,6 +197,44 @@ function RainfallPresetButtons({
   )
 }
 
+function RainfallTestSlider({
+  value,
+  onChange,
+  isDark,
+}: {
+  value: number
+  onChange: (value: number) => void
+  isDark: boolean
+}) {
+  const clampedValue = Math.max(0, Math.min(RAINFALL_TEST_SLIDER_MAX, Math.round(value)))
+
+  return (
+    <label className="mt-3 block">
+      <div className="flex items-center justify-between">
+        <span className={`text-xs font-black ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>강수 비율</span>
+        <span className={`rounded-full px-2 py-1 text-[11px] font-black ${isDark ? 'bg-slate-950 text-blue-200' : 'bg-white text-slate-700'}`}>
+          {clampedValue}%
+        </span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={RAINFALL_TEST_SLIDER_MAX}
+        step={RAINFALL_TEST_SLIDER_STEP}
+        value={clampedValue}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+        className="mt-2 w-full accent-blue-600"
+      />
+      <div className={`mt-1 flex items-center justify-between text-[10px] font-black ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+        <span>0</span>
+        <span>10</span>
+        <span>100</span>
+        <span>300</span>
+      </div>
+    </label>
+  )
+}
+
 function PlayIcon() {
   return (
     <svg
@@ -279,6 +325,9 @@ function getLayoutSourceLabel(loadedLayout: LoadedSimulationLayout) {
       ? `scenario #${loadedLayout.scenarioId} / ${loadedLayout.scenarioTitle} v${loadedLayout.scenarioVersion ?? 1}`
       : `scenario #${loadedLayout.scenarioId ?? '-'}`
   }
+  if (loadedLayout.source === 'imported') {
+    return 'imported JSON'
+  }
   return loadedLayout.source === 'localStorage' ? 'localStorage' : 'default fallback'
 }
 
@@ -348,7 +397,7 @@ function mergeEditorBlockagesIntoSwmmBlockages(
     if (blockage > 0) {
       next[target.swmmLinkId] = blockage
     } else {
-      delete next[target.swmmLinkId]
+      next[target.swmmLinkId] = 0
     }
   })
 
@@ -484,6 +533,10 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
 
   const layout = loadedLayout.layout
   const layoutSource = loadedLayout.source
+  const hasActiveSimulationLayout = loadedLayout.source === 'imported' || (
+    loadedLayout.source === 'scenario' && selectedScenarioId !== null
+  )
+  const shouldShowScenarioPrompt = !status?.hasSession && !hasActiveSimulationLayout
   const exportLayout = useMemo(() => normalizeRelationAttachments(layout), [layout])
   const { nodesById } = useLayoutIndexes(exportLayout)
   const blockageTargets = useMemo(
@@ -566,12 +619,13 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
       : [selectedPreviewTarget]
   }, [blockageTargets, selectedBlockageId, selectedPreviewNode, selectedPreviewTarget])
   const selectedPendingEditorBlockage = selectedPreviewNode
-    ? manualBlockagesByEditorId[selectedPreviewNode.id] ?? 0
+    ? manualBlockagesByEditorId[selectedPreviewNode.id] ?? clampPercent(selectedPreviewNode.props.blockage)
     : 0
   const selectedPreviewBlockageValue = selectedPreviewBlockageTargets.length > 0
     ? Math.max(...selectedPreviewBlockageTargets.map((target) => (
       manualBlockagesById[target.swmmLinkId]
       ?? (target.sourceEditorId ? manualBlockagesByEditorId[target.sourceEditorId] : undefined)
+      ?? (target.sourceEditorId ? clampPercent(nodesById.get(target.sourceEditorId)?.props.blockage) : undefined)
       ?? 0
     )))
     : selectedPendingEditorBlockage
@@ -605,6 +659,10 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     if (isExportingPng) {
       return
     }
+    if (shouldShowScenarioPrompt) {
+      setIsScenarioSettingsOpen(true)
+      return
+    }
 
     const svg = document.querySelector<SVGSVGElement>('[data-simulation-preview-svg="true"]')
     if (!svg) {
@@ -623,7 +681,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     } finally {
       setIsExportingPng(false)
     }
-  }, [isDark, isExportingPng])
+  }, [isDark, isExportingPng, shouldShowScenarioPrompt])
   useEffect(() => {
     return subscribeAppSurfaceChange((surface) => setIsMobileInput(surface === 'mobile'))
   }, [])
@@ -671,6 +729,24 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     setManualBlockagesByEditorId({})
   }, [])
 
+  const applyScenarioLayout = useCallback((scenario: SwmmScenario) => {
+    if (!isEditorLayout(scenario.layoutJson)) {
+      window.alert('선택한 시나리오의 배수도 JSON 구조가 올바르지 않습니다.')
+      return
+    }
+
+    setSelectedScenarioId(scenario.id)
+    saveSelectedSwmmScenarioId(scenario.id)
+    setLoadedLayout({
+      layout: normalizeRelationAttachments(scenario.layoutJson),
+      source: 'scenario',
+      scenarioId: scenario.id,
+      scenarioTitle: scenario.title,
+      scenarioVersion: scenario.version,
+    })
+    resetRuntimeView()
+  }, [resetRuntimeView])
+
   const refreshScenarios = useCallback(async () => {
     setIsLoadingScenarios(true)
     setScenarioError(null)
@@ -689,6 +765,29 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
       setIsLoadingScenarios(false)
     }
   }, [])
+
+  useEffect(() => {
+    if (selectedScenarioId !== null || status?.hasSession || scenarios.length === 0) {
+      return
+    }
+
+    const storedScenarioId = loadSelectedSwmmScenarioId()
+    if (!storedScenarioId) {
+      return
+    }
+
+    const scenario = scenarios.find((item) => item.id === storedScenarioId)
+    if (!scenario) {
+      clearSelectedSwmmScenarioId()
+      return
+    }
+
+    const timerId = window.setTimeout(() => {
+      applyScenarioLayout(scenario)
+    }, 0)
+
+    return () => window.clearTimeout(timerId)
+  }, [applyScenarioLayout, scenarios, selectedScenarioId, status?.hasSession])
 
   useEffect(() => {
     getSwmmEngineStatus(SWMM_ENGINE_URL)
@@ -756,7 +855,13 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   const handleScenarioSelect = (event: ChangeEvent<HTMLSelectElement>) => {
     const scenarioId = Number(event.target.value)
     if (!scenarioId) {
+      clearSelectedSwmmScenarioId()
       setSelectedScenarioId(null)
+      setLoadedLayout({
+        layout: createDefaultEditorLayout(),
+        source: 'default',
+      })
+      resetRuntimeView()
       return
     }
 
@@ -765,20 +870,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
       return
     }
 
-    if (!isEditorLayout(scenario.layoutJson)) {
-      window.alert('선택한 시나리오의 배수도 JSON 구조가 올바르지 않습니다.')
-      return
-    }
-
-    setSelectedScenarioId(scenario.id)
-    setLoadedLayout({
-      layout: normalizeRelationAttachments(scenario.layoutJson),
-      source: 'scenario',
-      scenarioId: scenario.id,
-      scenarioTitle: scenario.title,
-      scenarioVersion: scenario.version,
-    })
-    resetRuntimeView()
+    applyScenarioLayout(scenario)
   }
 
   const handleImportLayout = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -797,10 +889,11 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
 
       const importedLayout = normalizeRelationAttachments(parsedValue)
       saveEditorLayout(importedLayout)
+      clearSelectedSwmmScenarioId()
       setSelectedScenarioId(null)
       setLoadedLayout({
         layout: importedLayout,
-        source: 'localStorage',
+        source: 'imported',
       })
       resetRuntimeView()
     } catch (error) {
@@ -812,6 +905,10 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   }
 
   const startEngine = async () => {
+    if (!hasActiveSimulationLayout) {
+      setIsScenarioSettingsOpen(true)
+      return
+    }
     if (isStarting) {
       return
     }
@@ -928,20 +1025,12 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     const blockage = clampPercent(value)
     const nextManualBlockagesByEditorId = { ...manualBlockagesByEditorId }
     if (selectedPreviewNode) {
-      if (blockage > 0) {
-        nextManualBlockagesByEditorId[selectedPreviewNode.id] = blockage
-      } else {
-        delete nextManualBlockagesByEditorId[selectedPreviewNode.id]
-      }
+      nextManualBlockagesByEditorId[selectedPreviewNode.id] = blockage
     }
 
     const nextManualBlockagesById = { ...manualBlockagesById }
     getSelectedBlockageTargetIds().forEach((swmmLinkId) => {
-      if (blockage > 0) {
-        nextManualBlockagesById[swmmLinkId] = blockage
-      } else {
-        delete nextManualBlockagesById[swmmLinkId]
-      }
+      nextManualBlockagesById[swmmLinkId] = blockage
     })
 
     return {
@@ -980,11 +1069,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     if (selectedPreviewNode) {
       setManualBlockagesByEditorId((current) => {
         const next = { ...current }
-        if (blockage > 0) {
-          next[selectedPreviewNode.id] = blockage
-        } else {
-          delete next[selectedPreviewNode.id]
-        }
+        next[selectedPreviewNode.id] = blockage
         return next
       })
     }
@@ -998,11 +1083,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     setManualBlockagesById((current) => {
       const next = { ...current }
       linkedTargetIds.forEach((swmmLinkId) => {
-        if (blockage > 0) {
-          next[swmmLinkId] = blockage
-        } else {
-          delete next[swmmLinkId]
-        }
+        next[swmmLinkId] = blockage
       })
       return next
     })
@@ -1247,7 +1328,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
                 <button
                   type="button"
                   onClick={exportSimulationPng}
-                  disabled={isExportingPng}
+                  disabled={isExportingPng || shouldShowScenarioPrompt}
                   className={`h-11 w-full rounded-md border px-3 text-sm font-black transition-colors disabled:cursor-wait disabled:opacity-60 ${
                     isDark
                       ? 'border-purple-700 bg-purple-950 text-purple-100 hover:border-purple-300 hover:bg-purple-800'
@@ -1263,6 +1344,11 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
               <h3 className="text-sm font-black">날씨</h3>
               <div className={`mt-3 rounded-lg border p-2 ${themeTokens.panelMuted}`}>
                 <RainfallPresetButtons
+                  value={rainfallPercent}
+                  onChange={setRainfallPercent}
+                  isDark={isDark}
+                />
+                <RainfallTestSlider
                   value={rainfallPercent}
                   onChange={setRainfallPercent}
                   isDark={isDark}
@@ -1362,7 +1448,8 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
         <button
           type="button"
           onClick={startEngine}
-          disabled={isStarting || Boolean(status?.hasSession)}
+          disabled={isStarting || Boolean(status?.hasSession) || !hasActiveSimulationLayout}
+          title={!hasActiveSimulationLayout ? '시나리오 선택 후 엔진을 시작할 수 있습니다.' : '엔진 시작'}
           className="rounded-md border border-emerald-200 bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700 disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-200 disabled:text-slate-500"
         >
           {isStarting ? '시작 중' : '엔진 시작'}
@@ -1401,13 +1488,16 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     : 'border-white/25 bg-slate-950/92 text-white ring-1 ring-white/10 hover:bg-slate-900 focus-visible:ring-white'
   const floatingButtonSizeClassName = isMobileInput ? 'h-12 w-12' : 'h-[58px] w-[58px]'
   const floatingButtonIconClassName = isMobileInput ? 'h-4 w-4' : 'h-6 w-6'
+  const scenarioSelectionPulseClassName = shouldShowScenarioPrompt
+    ? 'animate-pulse ring-4 ring-amber-300/80 shadow-[0_0_30px_rgba(245,158,11,0.85)]'
+    : ''
   const scenarioSettingsFab = !isScenarioSettingsOpen && !isFullscreen ? (
     <button
       type="button"
       onClick={() => setIsScenarioSettingsOpen(true)}
       aria-label="시나리오세팅"
       title="시나리오세팅"
-      className={`fixed bottom-5 right-8 z-[120] flex ${floatingButtonSizeClassName} items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${floatingSystemButtonClassName}`}
+      className={`fixed bottom-5 right-8 z-[120] flex ${floatingButtonSizeClassName} items-center justify-center rounded-full border shadow-xl backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${floatingSystemButtonClassName} ${scenarioSelectionPulseClassName}`}
     >
       <GearIcon className={floatingButtonIconClassName} />
     </button>
@@ -1449,9 +1539,9 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
         <button
           type="button"
           onClick={startEngine}
-          disabled={isStarting}
+          disabled={isStarting || !hasActiveSimulationLayout}
           aria-label="엔진 시작"
-          title="엔진 시작"
+          title={!hasActiveSimulationLayout ? '시나리오 선택 후 엔진을 시작할 수 있습니다.' : '엔진 시작'}
           className={fullscreenPlayButtonClassName}
         >
           <PlayIcon />
@@ -1482,7 +1572,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
         onClick={() => setIsScenarioSettingsOpen(true)}
         aria-label="시나리오세팅"
         title="시나리오세팅"
-        className={fullscreenSettingsButtonClassName}
+        className={`${fullscreenSettingsButtonClassName} ${scenarioSelectionPulseClassName}`}
       >
         <GearIcon className={floatingButtonIconClassName} />
       </button>
@@ -1498,6 +1588,30 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     </div>
   ) : null
   const headerElement = renderHeader ? renderHeader() : null
+  const runtimeScenarioPrompt = shouldShowScenarioPrompt ? (
+    <div className={`flex min-h-[360px] flex-1 items-center justify-center rounded-lg border border-dashed px-6 py-12 text-center ${
+      isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-950'
+    }`}>
+      <div className="max-w-sm">
+        <div className={`mx-auto flex h-14 w-14 animate-pulse items-center justify-center rounded-full border shadow-[0_0_28px_rgba(245,158,11,0.75)] ${
+          isDark ? 'border-amber-300 bg-amber-400 text-slate-950' : 'border-amber-300 bg-amber-100 text-amber-700'
+        }`}>
+          <GearIcon className="h-6 w-6" />
+        </div>
+        <h3 className="mt-5 text-lg font-black">시나리오를 선택해주세요</h3>
+        <p className={`mt-2 text-sm font-bold leading-6 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          저장된 시나리오를 선택하면 런타임 뷰가 표시됩니다.
+        </p>
+        <button
+          type="button"
+          onClick={() => setIsScenarioSettingsOpen(true)}
+          className={`mt-5 rounded-md border px-4 py-2 text-sm font-black transition ${themeTokens.buttonActive}`}
+        >
+          시나리오세팅 열기
+        </button>
+      </div>
+    </div>
+  ) : null
 
   return (
     <section className={shellClassName} data-swmm-theme={theme}>
@@ -1576,8 +1690,8 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
                 {isNodeStatsOpen ? (
                   <div className={`border-t p-4 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                      <StatCell label="nodes" value={layout.nodes.length} />
-                      <StatCell label="links" value={layout.links.length} />
+                      <StatCell label="nodes" value={shouldShowScenarioPrompt ? 0 : layout.nodes.length} />
+                      <StatCell label="links" value={shouldShowScenarioPrompt ? 0 : layout.links.length} />
                       <StatCell label="step" value={snapshot?.stepIndex ?? status?.stepIndex ?? 0} />
                       <StatCell label="time" value={snapshot?.modelTime ?? status?.modelTime ?? '-'} />
                     </div>
@@ -1592,7 +1706,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
                 ) : null}
               </div>
 
-              {layoutSource === 'default' ? (
+              {layoutSource === 'default' && !shouldShowScenarioPrompt ? (
                 <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
                   저장된 편집 설계를 찾지 못해 기본 레이아웃이 표시되고 있습니다. 이전 설계 JSON을 불러오면 실험 화면과
                   localStorage 저장본이 그 설계로 복구됩니다.
@@ -1601,25 +1715,27 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
             </>
           ) : null}
 
-          <SimulationLayoutPreview
-            layout={exportLayout}
-            snapshot={snapshot}
-            rainfallPercent={rainfallPercent}
-            animationsActive={animationsActive}
-            theme={theme}
-            isFullscreen={isFullscreen}
-            fullscreenZoom={fullscreenZoom}
-            fullscreenViewResetSignal={fullscreenViewResetSignal}
-            onFullscreenZoomChange={setFullscreenZoom}
-            selectedPreviewNodeId={selectedPreviewNodeId}
-            selectedBlockageId={selectedBlockageId}
-            blockageTargets={blockageTargets}
-            onToggleFullscreen={toggleFullscreen}
-            onClearSelection={handleClearPreviewSelection}
-            onSelectPreviewNode={handleSelectPreviewNode}
-            onSelectBlockageTarget={handleSelectBlockageTarget}
-            animationSpeedMultiplier={speedMultiplier}
-          />
+          {runtimeScenarioPrompt ?? (
+            <SimulationLayoutPreview
+              layout={exportLayout}
+              snapshot={snapshot}
+              rainfallPercent={rainfallPercent}
+              animationsActive={animationsActive}
+              theme={theme}
+              isFullscreen={isFullscreen}
+              fullscreenZoom={fullscreenZoom}
+              fullscreenViewResetSignal={fullscreenViewResetSignal}
+              onFullscreenZoomChange={setFullscreenZoom}
+              selectedPreviewNodeId={selectedPreviewNodeId}
+              selectedBlockageId={selectedBlockageId}
+              blockageTargets={blockageTargets}
+              onToggleFullscreen={toggleFullscreen}
+              onClearSelection={handleClearPreviewSelection}
+              onSelectPreviewNode={handleSelectPreviewNode}
+              onSelectBlockageTarget={handleSelectBlockageTarget}
+              animationSpeedMultiplier={speedMultiplier}
+            />
+          )}
         </div>
       </div>
     </section>
