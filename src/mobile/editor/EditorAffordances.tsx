@@ -147,6 +147,7 @@ export function MobileLayoutAddEdgeButtons({
   }
 
   const stripSize = Math.min(88, Math.max(56, Math.min(width, height) * 0.18))
+  const buttonLength = Math.min(260, Math.max(170, Math.min(width, height) * 0.46))
   const centerX = bounds.left + width / 2
   const centerY = bounds.top + height / 2
   const sideButtons: Array<{
@@ -162,9 +163,9 @@ export function MobileLayoutAddEdgeButtons({
     {
       side: 'left',
       x: bounds.left,
-      y: bounds.top,
+      y: centerY - buttonLength / 2,
       width: stripSize,
-      height,
+      height: buttonLength,
       labelX: bounds.left + stripSize / 2,
       labelY: centerY,
       rotate: -90,
@@ -172,18 +173,18 @@ export function MobileLayoutAddEdgeButtons({
     {
       side: 'right',
       x: bounds.right - stripSize,
-      y: bounds.top,
+      y: centerY - buttonLength / 2,
       width: stripSize,
-      height,
+      height: buttonLength,
       labelX: bounds.right - stripSize / 2,
       labelY: centerY,
       rotate: 90,
     },
     {
       side: 'bottom',
-      x: bounds.left,
+      x: centerX - buttonLength / 2,
       y: bounds.bottom - stripSize,
-      width,
+      width: buttonLength,
       height: stripSize,
       labelX: centerX,
       labelY: bounds.bottom - stripSize / 2,

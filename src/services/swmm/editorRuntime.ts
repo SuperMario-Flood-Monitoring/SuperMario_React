@@ -48,7 +48,7 @@ export function clampPercent(value: unknown) {
   return Math.max(0, Math.min(100, numericControlValue(value)))
 }
 
-export const MAX_RAINFALL_PERCENT = 300
+export const MAX_RAINFALL_PERCENT = 500
 
 export function clampRainfallPercent(value: unknown) {
   return Math.max(0, Math.min(MAX_RAINFALL_PERCENT, numericControlValue(value)))

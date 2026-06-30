@@ -86,6 +86,7 @@ interface LocalVisualBounds {
 const MIN_PREVIEW_HEIGHT = 560
 const FLOW_ACTIVE_SPEED_THRESHOLD = 0.001
 const FLOW_ACTIVE_CMS_THRESHOLD = 0.00005
+const FULL_BLOCKAGE_RATIO_THRESHOLD = 0.999999
 const FULLSCREEN_DRAG_THRESHOLD_PX = 3
 const FULLSCREEN_WHEEL_ZOOM_STEP = 0.15
 const WHEEL_LINE_HEIGHT_PX = 16
@@ -208,6 +209,14 @@ function getRuntimeFillRatio(state: RuntimeObjectState | undefined) {
   )
 }
 
+function getPipeRuntimeFillRatio(state: RuntimeObjectState | undefined) {
+  return clamp01(state?.maxFullness)
+}
+
+function isFullyBlockedRuntimeState(state: RuntimeObjectState | undefined) {
+  return clamp01(state?.maxBlockageRatio) >= FULL_BLOCKAGE_RATIO_THRESHOLD
+}
+
 /** 채움 비율을 색상 경고 단계로 변환한다. */
 function getFillRiskLevel(ratio: number) {
   const percent = clamp01(ratio) * 100
@@ -273,6 +282,10 @@ function getManholeVisibleFillRatio(state: RuntimeObjectState | undefined) {
 function getNodeBadgeRatio(node: EditorNode, state: RuntimeObjectState | undefined) {
   if (node.type === 'manhole') {
     return getManholeVisibleFillRatio(state)
+  }
+
+  if (node.type === 'pipeSegment') {
+    return getPipeRuntimeFillRatio(state)
   }
 
   return getRuntimeFillRatio(state)
@@ -509,6 +522,10 @@ function getObjectLabelPosition(node: EditorNode, labelWidth: number, labelHeigh
 
 /** velocity가 없을 때 flow/inflow/fill 값을 fallback으로 사용해 animation 속도를 추정한다. */
 function getRuntimeFlowSpeed(state: RuntimeObjectState | undefined) {
+  if (isFullyBlockedRuntimeState(state)) {
+    return 0
+  }
+
   const velocity = Math.abs(state?.maxVelocityMps ?? 0)
   const flowFallback = Math.min(3, Math.abs(state?.flowCms ?? 0) * 12)
   const inflowFallback = Math.min(3, Math.abs(state?.totalInflowCms ?? 0) * 2)
@@ -521,9 +538,10 @@ function getFlowAnimationConfig(state: RuntimeObjectState | undefined, reverseFl
   const flowCms = state?.flowCms ?? 0
   const totalInflowCms = state?.totalInflowCms ?? 0
   const speed = getRuntimeFlowSpeed(state)
-  const isActive = speed > FLOW_ACTIVE_SPEED_THRESHOLD
+  const isFullyBlocked = isFullyBlockedRuntimeState(state)
+  const isActive = !isFullyBlocked && (speed > FLOW_ACTIVE_SPEED_THRESHOLD
     || Math.abs(flowCms) > FLOW_ACTIVE_CMS_THRESHOLD
-    || Math.abs(totalInflowCms) > FLOW_ACTIVE_CMS_THRESHOLD
+    || Math.abs(totalInflowCms) > FLOW_ACTIVE_CMS_THRESHOLD)
   const durationSeconds = isActive
     ? Math.max(0.35, Math.min(2.4, 2.25 / (1 + speed * 0.8)))
     : 2.8
@@ -1404,7 +1422,7 @@ function PipeSegmentNode({
   const flowHeight = orientation === 'horizontal' ? Math.max(0, innerHeight - blockedCrossAxis) : innerHeight
   const flowX = orientation === 'horizontal' ? innerInset : innerInset + blockedCrossAxis
   const flowY = innerInset
-  const runtimeRatio = getRuntimeFillRatio(state)
+  const runtimeRatio = getPipeRuntimeFillRatio(state)
   const ratio = runtimeRatio > PIPE_VISIBLE_FILL_THRESHOLD ? Math.max(runtimeRatio, PIPE_VISIBLE_FILL_MIN) : 0
   const flowConfig = getFlowAnimationConfig(state, reverseFlowThreshold)
   const waterFill = getRiskFillColor(palette.water, runtimeRatio)

@@ -78,6 +78,7 @@ interface RuntimeReport {
 }
 
 type BlockageTarget = NonNullable<NonNullable<RuntimeReport['dynamicControls']>['blockageTargets']>[number]
+type RuntimeObjectState = SwmmRealtimeSnapshot['editorObjects'][string]
 
 type SimulationLayoutSource = 'localStorage' | 'default' | 'scenario' | 'imported'
 
@@ -94,9 +95,9 @@ const RAINFALL_PRESET_OPTIONS = [
   { label: '맑음', value: 0 },
   { label: '우천', value: 10 },
   { label: '호우', value: 100 },
-  { label: '폭우', value: 300 },
+  { label: '폭우', value: 500 },
 ] as const
-const RAINFALL_TEST_SLIDER_MAX = 300
+const RAINFALL_TEST_SLIDER_MAX = 500
 const RAINFALL_TEST_SLIDER_STEP = 10
 const FULLSCREEN_ZOOM_MIN = 1
 const FULLSCREEN_ZOOM_STEP = 0.25
@@ -237,7 +238,7 @@ function RainfallTestSlider({
         <span>0</span>
         <span>10</span>
         <span>100</span>
-        <span>300</span>
+        <span>500</span>
       </div>
     </label>
   )
@@ -345,6 +346,17 @@ function formatPercentWithDetail(value: number | undefined) {
     return '-'
   }
   return `${Math.round(value * 100)}% (${(value * 100).toFixed(2)}%)`
+}
+
+function getSelectedObjectFillRatio(nodeType: string, state: RuntimeObjectState | undefined) {
+  if (nodeType === 'pipeSegment') {
+    return state?.maxFullness ?? 0
+  }
+
+  return Math.max(
+    state?.maxFullness ?? 0,
+    state?.maxDepthRatio ?? 0,
+  )
 }
 
 /** editor node type을 한국어 표시명으로 변환한다. */
@@ -1182,10 +1194,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
             <StatCell label="swmm id" value={selectedPreviewNode.swmmId || '-'} />
             <StatCell label="관 유량" value={formatNumber(selectedPreviewState?.flowCms)} />
             <StatCell label="유속" value={formatNumber(selectedPreviewState?.maxVelocityMps)} />
-            <StatCell label="차오름" value={formatPercentWithDetail(Math.max(
-              selectedPreviewState?.maxFullness ?? 0,
-              selectedPreviewState?.maxDepthRatio ?? 0,
-            ))} />
+            <StatCell label="차오름" value={formatPercentWithDetail(getSelectedObjectFillRatio(selectedPreviewNode.type, selectedPreviewState))} />
             <StatCell label="막힘" value={formatPercentWithDetail(selectedPreviewState?.maxBlockageRatio)} />
             <StatCell label="노드 수위" value={formatPrecisePercent(selectedPreviewState?.maxDepthRatio)} />
             <StatCell label="관 만관율" value={formatPrecisePercent(selectedPreviewState?.maxFullness)} />

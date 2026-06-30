@@ -376,6 +376,15 @@ function formatZoomPercentLabel(zoom: number, defaultZoom = 1) {
   return `${Math.round((zoom / defaultZoom) * 100)}%`
 }
 
+function isPointInsideRectBounds(point: Point, bounds: RectBounds) {
+  return (
+    point.x >= bounds.left &&
+    point.x <= bounds.right &&
+    point.y >= bounds.top &&
+    point.y <= bounds.bottom
+  )
+}
+
 function truncateMobileQuickEditText(value: string, maxLength: number) {
   if (value.length <= maxLength) {
     return value
@@ -3778,6 +3787,59 @@ export const EditorCanvas = memo(function EditorCanvas({
   const baseGroundWidth = Math.max(0, baseGroundBounds.right - baseGroundBounds.left)
   const baseGroundHeight = Math.max(0, baseGroundBounds.bottom - baseGroundBounds.top)
   const hasVisibleBaseGround = baseGroundWidth > 1 && baseGroundHeight > 1
+  const hasGroundTerrainNode = useMemo(() => (
+    layout.nodes.some((node) => node.type === 'terrain' && normalizeTerrainKind(node.props.terrainKind) === 'ground')
+  ), [layout.nodes])
+
+  const createSelectableBaseGroundNode = useCallback(() => {
+    if (!hasVisibleBaseGround || hasGroundTerrainNode) {
+      return null
+    }
+
+    const nodeType: EditorNodeType = 'terrain'
+    const createdNode = normalizeNodeGeometryForPipePreset(
+      createEditorNode(nodeType, nextNodeIndex, layout.groundSurfaceY),
+    )
+    const width = Math.max(MIN_TERRAIN_WIDTH, baseGroundWidth)
+    const height = Math.max(MIN_TERRAIN_HEIGHT, baseGroundHeight)
+    const nextNode = normalizeNodePorts({
+      ...createdNode,
+      name: `${TERRAIN_KIND_BY_ID.ground.nodeName} ${nextNodeIndex}`,
+      x: baseGroundBounds.left,
+      y: baseGroundBounds.top,
+      width,
+      height,
+      ports: createEditorPorts(nodeType, width, height),
+      props: { terrainKind: 'ground' },
+    })
+
+    setLayout((currentLayout) => {
+      const currentHasGroundTerrainNode = currentLayout.nodes.some((node) => (
+        node.type === 'terrain' && normalizeTerrainKind(node.props.terrainKind) === 'ground'
+      ))
+
+      if (currentHasGroundTerrainNode) {
+        return currentLayout
+      }
+
+      return {
+        ...currentLayout,
+        nodes: [...currentLayout.nodes, nextNode],
+      }
+    })
+
+    return nextNode
+  }, [
+    baseGroundBounds.left,
+    baseGroundBounds.top,
+    baseGroundHeight,
+    baseGroundWidth,
+    hasGroundTerrainNode,
+    hasVisibleBaseGround,
+    layout.groundSurfaceY,
+    nextNodeIndex,
+    setLayout,
+  ])
 
   // 선택된 노드에 연결된 relation/link 목록은 포트 색상과 오른쪽 패널 표시에서 사용한다.
   const selectedConnectedLinks = useMemo(() => {
@@ -4519,6 +4581,37 @@ export const EditorCanvas = memo(function EditorCanvas({
     }
 
     const cursor = getSvgCursor(event.currentTarget, event.clientX, event.clientY)
+    if (hasVisibleBaseGround && isPointInsideRectBounds(cursor, baseGroundBounds)) {
+      const baseGroundNode = createSelectableBaseGroundNode()
+      if (baseGroundNode) {
+        event.preventDefault()
+        clearLongPressTimer()
+        setPendingPort(null)
+        setAttachTargetNodeId(null)
+        setCoordinateEditState(null)
+        setDragState(null)
+        setDragDraftPositionsByNodeId(null)
+        setResizeState(null)
+        setResizeDraftNodesById(null)
+        setMarqueeSelectionState(null)
+        setRelationPreviewNodeId(null)
+        mobileMoveArmedNodeIdRef.current = null
+        setMobileMoveArmedNodeId(null)
+        setMobileEditorMode('idle')
+        setMobileActiveNodeId(baseGroundNode.id)
+        if (event.pointerType === 'touch' || event.pointerType === 'pen' || isMobileInput) {
+          openMobileNodeActionMenu(baseGroundNode, cursor)
+        } else {
+          setSelection({ kind: 'node', id: baseGroundNode.id })
+          setIsEditorInfoPanelOpen(true)
+          setMobileQuickEditNodeId(null)
+          setMobileQuickEditPanel(null)
+          setMobileQuickEditAnchorPoint(null)
+          setContextMenu(null)
+        }
+        return
+      }
+    }
 
     if (event.pointerType === 'touch' || event.pointerType === 'pen') {
       const shouldKeepMobileActionSheetOpen = Boolean(
@@ -4651,7 +4744,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     const point = svg ? getSvgCursor(svg, event.clientX, event.clientY) : { x: node.x, y: node.y }
 
     if (!isMobileInput && node.type === 'terrain') {
-      setSelection(null)
+      setSelection({ kind: 'node', id: node.id })
       setPendingPort(null)
       setAttachTargetNodeId(null)
       setContextMenu({

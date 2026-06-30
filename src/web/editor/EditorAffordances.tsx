@@ -21,6 +21,7 @@ export function LayoutAddHandles({
   }
 
   const stripSize = Math.min(88, Math.max(56, Math.min(width, height) * 0.18))
+  const buttonLength = Math.min(240, Math.max(150, Math.min(width, height) * 0.42))
   const centerX = bounds.left + width / 2
   const centerY = bounds.top + height / 2
   const handles: Array<{
@@ -36,9 +37,9 @@ export function LayoutAddHandles({
     {
       side: 'left',
       x: bounds.left,
-      y: bounds.top,
+      y: centerY - buttonLength / 2,
       hitWidth: stripSize,
-      hitHeight: height,
+      hitHeight: buttonLength,
       labelX: bounds.left + stripSize / 2,
       labelY: centerY,
       rotate: -90,
@@ -46,18 +47,18 @@ export function LayoutAddHandles({
     {
       side: 'right',
       x: bounds.right - stripSize,
-      y: bounds.top,
+      y: centerY - buttonLength / 2,
       hitWidth: stripSize,
-      hitHeight: height,
+      hitHeight: buttonLength,
       labelX: bounds.right - stripSize / 2,
       labelY: centerY,
       rotate: 90,
     },
     {
       side: 'bottom',
-      x: bounds.left,
+      x: centerX - buttonLength / 2,
       y: bounds.bottom - stripSize,
-      hitWidth: width,
+      hitWidth: buttonLength,
       hitHeight: stripSize,
       labelX: centerX,
       labelY: bounds.bottom - stripSize / 2,
