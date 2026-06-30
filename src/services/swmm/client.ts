@@ -34,6 +34,7 @@ export type {
   SwmmLlmTriggerPayload,
   SwmmLinkState,
   SwmmNodeState,
+  SwmmRealtimeAlertPayload,
   SwmmRealtimeSnapshot,
   SwmmRiskEvent,
   SwmmRiskPayload,

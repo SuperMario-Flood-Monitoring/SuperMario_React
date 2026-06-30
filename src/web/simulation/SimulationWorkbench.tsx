@@ -27,6 +27,7 @@ import {
   updateSwmmEngineControl,
   type SwmmEngineControl,
   type SwmmEngineStatus,
+  type SwmmRealtimeAlertPayload,
   type SwmmRealtimeSnapshot,
   type SwmmScenario,
 } from '../../services/swmm/client'
@@ -49,6 +50,13 @@ import { useLayoutIndexes } from '../diagram/useLayoutIndexes'
 import { SimulationLayoutPreview } from './SimulationLayoutPreview'
 import { downloadSvgAsPng } from './pngExport'
 import { WORKBENCH_THEME_TOKENS, type WorkbenchTheme } from '../theme/workbenchTheme'
+import { RuntimeAlertToast } from '../../shared/simulation/RuntimeAlertToast'
+import {
+  isRuntimeAlertPayload,
+  RUNTIME_ALERT_REPEAT_GAP_MS,
+  RUNTIME_ALERT_TOAST_DURATION_MS,
+  runtimeAlertKey,
+} from '../../shared/simulation/runtimeAlertToastUtils'
 import { GearIcon } from '../ui/WebIcons'
 import { WebPortal } from '../ui/WebPortal'
 import { WebZoomControls } from '../ui/WebZoomControls'
@@ -477,6 +485,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   const [scenarioError, setScenarioError] = useState<string | null>(null)
   const [status, setStatus] = useState<SwmmEngineStatus | null>(null)
   const [snapshot, setSnapshot] = useState<SwmmRealtimeSnapshot | null>(null)
+  const [runtimeAlertToast, setRuntimeAlertToast] = useState<SwmmRealtimeAlertPayload | null>(null)
   const [runtimeMapping, setRuntimeMapping] = useState<SwmmRuntimeMapping | null>(null)
   const [runtimeReport, setRuntimeReport] = useState<RuntimeReport | null>(null)
   const [rainfallPercent, setRainfallPercent] = useState(0)
@@ -501,6 +510,10 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   const [isExportingPng, setIsExportingPng] = useState(false)
   const socketRef = useRef<WebSocket | null>(null)
   const autoApplyTimerRef = useRef<number | null>(null)
+  const runtimeAlertTimerRef = useRef<number | null>(null)
+  const visibleRuntimeAlertKeyRef = useRef<string | null>(null)
+  const lastRuntimeAlertKeyRef = useRef<string | null>(null)
+  const lastRuntimeAlertAtRef = useRef(0)
   const layoutFileInputRef = useRef<HTMLInputElement | null>(null)
   const previewSelectionClearedRef = useRef(false)
   const runtimeSheetDragStartYRef = useRef<number | null>(null)
@@ -691,6 +704,49 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
     setIsSocketConnected(false)
   }, [])
 
+  const clearRuntimeAlertTimer = useCallback(() => {
+    if (runtimeAlertTimerRef.current !== null) {
+      window.clearTimeout(runtimeAlertTimerRef.current)
+      runtimeAlertTimerRef.current = null
+    }
+  }, [])
+
+  const dismissRuntimeAlertToast = useCallback(() => {
+    clearRuntimeAlertTimer()
+    visibleRuntimeAlertKeyRef.current = null
+    setRuntimeAlertToast(null)
+  }, [clearRuntimeAlertTimer])
+
+  const resetRuntimeAlertToast = useCallback(() => {
+    dismissRuntimeAlertToast()
+    lastRuntimeAlertKeyRef.current = null
+    lastRuntimeAlertAtRef.current = 0
+  }, [dismissRuntimeAlertToast])
+
+  const showRuntimeAlertToast = useCallback((alert: SwmmRealtimeAlertPayload) => {
+    const key = runtimeAlertKey(alert)
+    const now = Date.now()
+    if (visibleRuntimeAlertKeyRef.current === key) {
+      return
+    }
+    if (lastRuntimeAlertKeyRef.current === key && now - lastRuntimeAlertAtRef.current < RUNTIME_ALERT_REPEAT_GAP_MS) {
+      return
+    }
+
+    clearRuntimeAlertTimer()
+    lastRuntimeAlertKeyRef.current = key
+    lastRuntimeAlertAtRef.current = now
+    visibleRuntimeAlertKeyRef.current = key
+    setRuntimeAlertToast(alert)
+    runtimeAlertTimerRef.current = window.setTimeout(() => {
+      if (visibleRuntimeAlertKeyRef.current === key) {
+        visibleRuntimeAlertKeyRef.current = null
+        setRuntimeAlertToast(null)
+      }
+      runtimeAlertTimerRef.current = null
+    }, RUNTIME_ALERT_TOAST_DURATION_MS)
+  }, [clearRuntimeAlertTimer])
+
   const connectSocket = useCallback(() => {
     closeSocket()
     const socket = new WebSocket(getSwmmWebSocketUrl(SWMM_ENGINE_URL))
@@ -702,6 +758,9 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
       const payload: unknown = JSON.parse(event.data)
       if (isRealtimeSnapshot(payload)) {
         setSnapshot(payload)
+        if (isRuntimeAlertPayload(payload.realtimeAlert)) {
+          showRuntimeAlertToast(payload.realtimeAlert)
+        }
         setStatus((currentStatus) => currentStatus ? {
           ...currentStatus,
           running: payload.type === 'paused' ? false : payload.type === 'control' ? currentStatus.running : true,
@@ -712,21 +771,35 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
           modelTime: payload.modelTime,
           control: payload.control,
         } : currentStatus)
-      } else if (isRecordValue(payload) && typeof payload.running === 'boolean') {
-        setStatus((currentStatus) => statusFromSocketPayload(payload, currentStatus))
+      } else if (isRecordValue(payload)) {
+        if (isRuntimeAlertPayload(payload.realtimeAlert)) {
+          showRuntimeAlertToast(payload.realtimeAlert)
+        }
+        if (typeof payload.running === 'boolean') {
+          setStatus((currentStatus) => statusFromSocketPayload(payload, currentStatus))
+        }
       }
     }
-  }, [closeSocket])
+  }, [closeSocket, showRuntimeAlertToast])
 
   const resetRuntimeView = useCallback(() => {
     previewSelectionClearedRef.current = false
     setSnapshot(null)
+    resetRuntimeAlertToast()
     setRuntimeMapping(null)
     setRuntimeReport(null)
     setSelectedBlockageId('')
     setSelectedPreviewNodeId('')
     setManualBlockagesById({})
     setManualBlockagesByEditorId({})
+  }, [resetRuntimeAlertToast])
+
+  useEffect(() => {
+    return () => {
+      if (runtimeAlertTimerRef.current !== null) {
+        window.clearTimeout(runtimeAlertTimerRef.current)
+      }
+    }
   }, [])
 
   const applyScenarioLayout = useCallback((scenario: SwmmScenario) => {
@@ -1616,6 +1689,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   return (
     <section className={shellClassName} data-swmm-theme={theme}>
       <WebPortal>
+        <RuntimeAlertToast alert={runtimeAlertToast} onDismiss={dismissRuntimeAlertToast} />
         {scenarioSettingsSheet}
         {runtimeInfoSheet}
         {scenarioSettingsFab}

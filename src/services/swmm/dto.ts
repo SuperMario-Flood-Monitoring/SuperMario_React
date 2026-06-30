@@ -130,7 +130,7 @@ export interface SwmmRiskPayload {
 export interface SwmmLlmTriggerPayload {
   shouldTrigger: boolean
   reason: string | null
-  contextLevel: 'optimal' | 'medium' | 'full'
+  contextLevel: 'optimal' | 'medium' | 'full' | 'forecast'
   triggeredIssues: Array<Record<string, unknown>>
   newIssueCount: number
   escalatedIssueCount: number
@@ -138,6 +138,17 @@ export interface SwmmLlmTriggerPayload {
   resolvedIssues: Array<Record<string, unknown>>
   suppression: Record<string, unknown>
   context?: Record<string, unknown>
+}
+
+export interface SwmmRealtimeAlertPayload {
+  kind: 'persistent_abnormal' | string
+  severity: SwmmRiskSeverity | string
+  title: string
+  message: string
+  reason?: string | null
+  source?: string
+  key?: string
+  triggeredIssues?: Array<Record<string, unknown>>
 }
 
 export interface SwmmRealtimeSnapshot {
@@ -159,6 +170,7 @@ export interface SwmmRealtimeSnapshot {
   summary: SwmmSnapshotSummary
   risk?: SwmmRiskPayload
   llmTrigger?: SwmmLlmTriggerPayload
+  realtimeAlert?: SwmmRealtimeAlertPayload
 }
 
 export interface EngineStartRequest {
