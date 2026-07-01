@@ -4865,6 +4865,7 @@ export const EditorCanvas = memo(function EditorCanvas({
         x: event.clientX,
         y: event.clientY,
         point,
+        nodeId: node.id,
       })
       return
     }

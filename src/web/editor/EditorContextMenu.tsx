@@ -312,6 +312,21 @@ export function EditorContextMenu({
               </button>
             </>
           ) : null}
+          {canDeleteSelection ? (
+            <>
+              <div className={`my-1 border-t ${dividerClassName}`} />
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteSelection?.()
+                  onClose()
+                }}
+                className={`block w-full px-3 py-2 text-left text-sm font-black ${roseItemClassName}`}
+              >
+                객체 삭제
+              </button>
+            </>
+          ) : null}
         </>
       ) : contextMenu.layoutAdd ? (
         <>
