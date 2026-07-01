@@ -13,8 +13,10 @@
 | `/simulation/fullscreen` | `simulationFullscreen` | 시뮬레이션 전체화면 |
 | `/editor` | `editor` | 편집 모드 |
 | `/logs` | `logs` | 위험 로그 |
+| `/demo/admin` | `demoAdmin` | 데모용 관리자 자동 로그인 |
 
 알 수 없는 경로 또는 루트 경로는 로그인 라우트로 처리한다. 이미 인증 세션이 있으면 로그인 대신 `/simulation`으로 이동한다.
+`/demo/admin`은 진입 즉시 관리자 계정으로 로그인 요청을 보내고, 성공하면 `/simulation`으로 replace 이동한다.
 
 ## 라우트 결정
 

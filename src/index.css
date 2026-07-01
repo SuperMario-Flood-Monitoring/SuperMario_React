@@ -34,6 +34,26 @@ body {
   min-width: 0;
 }
 
+.demo-admin-login {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.14), transparent 36rem),
+    #eef4fb;
+  color: #0f172a;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.demo-admin-login span {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 1.5rem 4rem rgba(15, 23, 42, 0.12);
+  padding: 1rem 1.25rem;
+}
+
 .scrollbar-hidden {
   scrollbar-width: none;
   -ms-overflow-style: none;

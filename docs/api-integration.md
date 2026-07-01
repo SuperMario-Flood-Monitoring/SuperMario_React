@@ -36,6 +36,7 @@
 - 세션 정보와 access token은 `authState.ts`를 통해 저장한다.
 - mock login 옵션이 켜져 있으면 실제 로그인 요청 대신 mock 세션을 만든다.
 - 로그아웃은 서버 요청을 보낸 뒤 로컬 인증 상태를 정리한다.
+- `/demo/admin` 진입 시에도 같은 로그인 API를 사용하며, `admin` / `supermario4` 값으로 요청한 뒤 성공 시 `/simulation`으로 이동한다.
 
 ## SWMM API
 
