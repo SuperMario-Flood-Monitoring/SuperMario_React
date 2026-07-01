@@ -19,6 +19,7 @@ interface DrainageWorkbenchProps {
   onModeChange?: (mode: WorkbenchMode) => void
   simulationFullscreenActive?: boolean
   onSimulationFullscreenChange?: (active: boolean) => void
+  onNavigateAbout?: () => void
   onLogout?: () => void
 }
 
@@ -114,6 +115,7 @@ export function DrainageWorkbench({
   onModeChange,
   simulationFullscreenActive = false,
   onSimulationFullscreenChange,
+  onNavigateAbout,
   onLogout,
 }: DrainageWorkbenchProps) {
   const [internalMode, setInternalMode] = useState<WorkbenchMode>('simulation')
@@ -240,18 +242,33 @@ export function DrainageWorkbench({
         </div>
       </header>
       <div className={`min-w-0 lg:hidden ${themeTokens.header}`}>
-        <div className={`flex min-w-0 items-center gap-2 border-b px-3 py-2 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-          <img src={logoImage} alt="" className="h-8 w-8 shrink-0 rounded-md object-contain" />
-          <div className="min-w-0 truncate text-base font-black tracking-normal">
-            수퍼마리오
+        <div className={`flex min-w-0 items-center justify-between gap-2 border-b px-3 py-2 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          <div className="flex min-w-0 items-center gap-2">
+            <img src={logoImage} alt="" className="h-8 w-8 shrink-0 rounded-md object-contain" />
+            <div className="min-w-0 truncate text-base font-black tracking-normal">
+              수퍼마리오
+            </div>
           </div>
+          {onNavigateAbout ? (
+            <button
+              type="button"
+              onClick={onNavigateAbout}
+              className={`shrink-0 rounded-md border px-2.5 py-1.5 text-[11px] font-black transition ${
+                isDark
+                  ? 'border-slate-600 bg-slate-900 text-slate-100 hover:border-slate-500'
+                  : 'border-slate-300 bg-slate-100 text-slate-700 hover:border-slate-400'
+              }`}
+            >
+              About Us
+            </button>
+          ) : null}
         </div>
         <div className={`grid min-w-0 ${mobileActionGridColumns} gap-1.5 border-b px-2 py-2 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
           {renderWorkbenchActions('mobile')}
         </div>
       </div>
     </>
-  ), [config.description, isDark, mobileActionGridColumns, renderWorkbenchActions, theme, themeTokens.description, themeTokens.header])
+  ), [config.description, isDark, mobileActionGridColumns, onNavigateAbout, renderWorkbenchActions, theme, themeTokens.description, themeTokens.header])
 
   return (
     <main className={`min-h-screen min-w-0 overflow-x-hidden ${themeTokens.app}`}>

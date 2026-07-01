@@ -19,6 +19,7 @@ interface DrainageWorkbenchProps {
   onModeChange?: (mode: WorkbenchMode) => void
   simulationFullscreenActive?: boolean
   onSimulationFullscreenChange?: (active: boolean) => void
+  onNavigateAbout?: () => void
   onLogout?: () => void
 }
 
@@ -114,6 +115,7 @@ export function DrainageWorkbench({
   onModeChange,
   simulationFullscreenActive = false,
   onSimulationFullscreenChange,
+  onNavigateAbout,
   onLogout,
 }: DrainageWorkbenchProps) {
   const [internalMode, setInternalMode] = useState<WorkbenchMode>('simulation')
@@ -172,6 +174,15 @@ export function DrainageWorkbench({
 
     return (
       <>
+        {variant === 'desktop' && onNavigateAbout ? (
+          <button
+            type="button"
+            onClick={onNavigateAbout}
+            className={`${actionButtonClassName} ${themeTokens.buttonMuted}`}
+          >
+            About Us
+          </button>
+        ) : null}
         {variant === 'desktop' ? (
           <button
             type="button"
@@ -214,7 +225,7 @@ export function DrainageWorkbench({
         ) : null}
       </>
     )
-  }, [activeMode, changeMode, isDark, onLogout, themeTokens.button, themeTokens.buttonActive, themeTokens.buttonMuted])
+  }, [activeMode, changeMode, isDark, onLogout, onNavigateAbout, themeTokens.button, themeTokens.buttonActive, themeTokens.buttonMuted])
 
   const renderWorkbenchHeader = useCallback((infoPanelControls?: InfoPanelControls) => (
     <>
