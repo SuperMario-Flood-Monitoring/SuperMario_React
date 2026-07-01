@@ -26,6 +26,9 @@ export function EditorScenarioToolbar({
   onRefreshScenarios,
   onCreateNewScenario,
   onBeginScenarioEdit,
+  isScenarioSelectionLocked = false,
+  isScenarioEditLocked = false,
+  scenarioLockMessage = 'demo/admin 시연 모드에서는 기존 시나리오를 변경할 수 없습니다.',
 }: {
   isDark: boolean
   buttonClassName: string
@@ -46,6 +49,9 @@ export function EditorScenarioToolbar({
   onRefreshScenarios: () => void
   onCreateNewScenario: () => void
   onBeginScenarioEdit: () => void
+  isScenarioSelectionLocked?: boolean
+  isScenarioEditLocked?: boolean
+  scenarioLockMessage?: string
 }) {
   return (
     <div className={`border-b px-4 py-3 ${isDark ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50/80'}`}>
@@ -109,7 +115,8 @@ export function EditorScenarioToolbar({
             <select
               value={selectedScenario?.id ?? ''}
               onChange={(event) => onScenarioSelect(event.target.value)}
-              disabled={isLoadingScenarios || isSavingScenario}
+              disabled={isScenarioSelectionLocked || isLoadingScenarios || isSavingScenario}
+              title={isScenarioSelectionLocked ? scenarioLockMessage : undefined}
               className={`h-10 min-w-0 flex-1 rounded-md border px-3 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
                 isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-slate-300 bg-white text-slate-800'
               }`}
@@ -149,7 +156,8 @@ export function EditorScenarioToolbar({
               <button
                 type="button"
                 onClick={onBeginScenarioEdit}
-                disabled={isSavingScenario}
+                disabled={isScenarioEditLocked || isSavingScenario}
+                title={isScenarioEditLocked ? scenarioLockMessage : '시나리오 수정'}
                 className={`rounded-md border px-3 py-2 text-xs font-black disabled:cursor-not-allowed disabled:opacity-60 ${
                   isDark ? 'border-blue-900 bg-slate-950 text-blue-200 hover:bg-slate-800' : 'border-blue-300 bg-blue-100 text-blue-700 hover:bg-white'
                 }`}

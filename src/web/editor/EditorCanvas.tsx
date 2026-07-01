@@ -63,6 +63,7 @@ import { EditableNode } from './EditableNode'
 import { EditorScenarioToolbar } from './EditorScenarioToolbar'
 import { SelectionPanel, SummaryCard } from './EditorSelectionPanel'
 import { apiClient } from '../../services/http/apiClient'
+import { isDemoControlLocked } from '../../services/demoControlLock'
 import { getInitialAppSurface, subscribeAppSurfaceChange } from '../../app/deviceSurface'
 import {
   endpointKey,
@@ -3061,6 +3062,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   const [selectedScenario, setSelectedScenario] = useState<SwmmScenario | null>(null)
   const [scenarioEditBaseline, setScenarioEditBaseline] = useState<EditorLayout | null>(null)
   const [scenarioCancelBaseline, setScenarioCancelBaseline] = useState<EditorLayout | null>(null)
+  const [createdScenarioEditId, setCreatedScenarioEditId] = useState<number | null>(null)
   const [isScenarioEditMode, setIsScenarioEditMode] = useState(false)
   const [scenarioTitle, setScenarioTitle] = useState('')
   const [scenarioDescription, setScenarioDescription] = useState('')
@@ -3129,6 +3131,8 @@ export const EditorCanvas = memo(function EditorCanvas({
   }, [])
   const suppressCoordinateEditFollowUpClickUntilRef = useRef(0)
   const nextNodeIndex = layout.nodes.length + 1
+  const demoControlLocked = isDemoControlLocked()
+  const demoScenarioLockMessage = 'demo/admin 시연 모드에서는 편집세팅의 기존 시나리오 선택/수정을 할 수 없습니다.'
   const isScenarioReadOnly = Boolean(selectedScenario && !isScenarioEditMode)
   const isScenarioReadOnlyRef = useRef(isScenarioReadOnly)
   const editorToastTimerRef = useRef<number | null>(null)
@@ -3349,6 +3353,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     saveSelectedSwmmScenarioId(scenario.id)
     setScenarioEditBaseline(normalizedLayout)
     setScenarioCancelBaseline(null)
+    setCreatedScenarioEditId(null)
     setScenarioTitle(scenario.title)
     setScenarioDescription(scenario.description)
     setIsScenarioEditMode(false)
@@ -3378,12 +3383,18 @@ export const EditorCanvas = memo(function EditorCanvas({
   }, [isScenarioEditMode, scenarios, selectScenario, selectedScenario])
 
   const handleScenarioSelect = (scenarioIdValue: string) => {
+    if (demoControlLocked) {
+      showEditorToast(demoScenarioLockMessage)
+      return
+    }
+
     const scenarioId = Number(scenarioIdValue)
     if (!scenarioId) {
       clearSelectedSwmmScenarioId()
       setSelectedScenario(null)
       setScenarioEditBaseline(null)
       setScenarioCancelBaseline(null)
+      setCreatedScenarioEditId(null)
       setScenarioTitle('')
       setScenarioDescription('')
       setIsScenarioEditMode(false)
@@ -3400,6 +3411,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     clearSelectedSwmmScenarioId()
     setSelectedScenario(null)
     setScenarioEditBaseline(nextLayout)
+    setCreatedScenarioEditId(null)
     setScenarioTitle('새 시나리오')
     setScenarioDescription('')
     setIsScenarioEditMode(true)
@@ -3407,11 +3419,17 @@ export const EditorCanvas = memo(function EditorCanvas({
   }
 
   const beginScenarioEdit = () => {
+    if (demoControlLocked) {
+      showEditorToast(demoScenarioLockMessage)
+      return
+    }
+
     if (!selectedScenario) {
       return
     }
     setScenarioEditBaseline(normalizeEditorLayout(selectedScenario.layoutJson))
     setScenarioCancelBaseline(null)
+    setCreatedScenarioEditId(null)
     setScenarioTitle(selectedScenario.title)
     setScenarioDescription(selectedScenario.description)
     setIsScenarioEditMode(true)
@@ -3433,15 +3451,18 @@ export const EditorCanvas = memo(function EditorCanvas({
       const selectedLayout = normalizeEditorLayout(selectedScenario.layoutJson)
       replaceLayout(selectedLayout)
       setScenarioEditBaseline(selectedLayout)
+      setCreatedScenarioEditId(null)
       setScenarioTitle(selectedScenario.title)
       setScenarioDescription(selectedScenario.description)
     } else if (scenarioCancelBaseline) {
       replaceLayout(scenarioCancelBaseline)
       setScenarioEditBaseline(null)
+      setCreatedScenarioEditId(null)
       setScenarioTitle('')
       setScenarioDescription('')
     } else {
       setScenarioEditBaseline(null)
+      setCreatedScenarioEditId(null)
       setScenarioTitle('')
       setScenarioDescription('')
     }
@@ -3455,6 +3476,10 @@ export const EditorCanvas = memo(function EditorCanvas({
     if (isSavingScenario) {
       return
     }
+    if (demoControlLocked && selectedScenario && selectedScenario.id !== createdScenarioEditId) {
+      showEditorToast(demoScenarioLockMessage)
+      return
+    }
 
     const title = scenarioTitle.trim()
     if (!title) {
@@ -3466,6 +3491,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     setScenarioError(null)
     try {
       const exportLayout = normalizeRelationAttachments(layout)
+      const isCreatingScenario = !selectedScenario
       const savedScenario = selectedScenario
         ? await updateSwmmScenario(SWMM_ENGINE_URL, selectedScenario.id, {
             title,
@@ -3482,9 +3508,10 @@ export const EditorCanvas = memo(function EditorCanvas({
       saveSelectedSwmmScenarioId(savedScenario.id)
       setScenarioEditBaseline(normalizeEditorLayout(savedScenario.layoutJson))
       setScenarioCancelBaseline(null)
+      setCreatedScenarioEditId(isCreatingScenario ? savedScenario.id : createdScenarioEditId)
       setScenarioTitle(savedScenario.title)
       setScenarioDescription(savedScenario.description)
-      setIsScenarioEditMode(false)
+      setIsScenarioEditMode(isCreatingScenario || selectedScenario?.id === createdScenarioEditId)
       setScenarios((currentScenarios) => [
         savedScenario,
         ...currentScenarios.filter((scenario) => scenario.id !== savedScenario.id),
@@ -5843,6 +5870,9 @@ export const EditorCanvas = memo(function EditorCanvas({
       onRefreshScenarios={refreshScenarios}
       onCreateNewScenario={createNewScenario}
       onBeginScenarioEdit={beginScenarioEdit}
+      isScenarioSelectionLocked={demoControlLocked}
+      isScenarioEditLocked={demoControlLocked}
+      scenarioLockMessage={demoScenarioLockMessage}
     />
   )
   const editorSettingsSheet = isEditorSettingsOpen ? (

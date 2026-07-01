@@ -11,6 +11,7 @@ import {
   setAuthFailureHandler,
   type AuthSession,
 } from './services/auth/authState'
+import { clearDemoControlLock, enableDemoControlLock } from './services/demoControlLock'
 
 const MobileDrainageWorkbench = lazy(() => import('./mobile/layout/DrainageWorkbench').then((module) => ({
   default: module.DrainageWorkbench,
@@ -172,6 +173,7 @@ function App() {
 
   useEffect(() => {
     return setAuthFailureHandler(() => {
+      clearDemoControlLock()
       setAuthSession(null)
       navigate('login', { replace: true })
     })
@@ -184,12 +186,14 @@ function App() {
   }, [authSession, route])
 
   const handleLogin = async (username: string, password: string) => {
+    clearDemoControlLock()
     const nextSession = await loginWithPassword(username, password)
     setAuthSession(nextSession)
     navigate('simulation', { replace: true })
   }
 
   const handleLogout = () => {
+    clearDemoControlLock()
     logoutFromServer().catch(() => clearAuthState({ clearRefreshCookies: true }))
     setAuthSession(null)
     navigate('login', { replace: true })
@@ -206,12 +210,14 @@ function App() {
     }
 
     demoAdminLoginStartedRef.current = true
+    enableDemoControlLock()
     loginWithPassword(DEMO_ADMIN_USERNAME, DEMO_ADMIN_PASSWORD)
       .then((nextSession) => {
         setAuthSession(nextSession)
         navigate('simulation', { replace: true })
       })
       .catch(() => {
+        clearDemoControlLock()
         clearAuthState({ clearRefreshCookies: true })
         setAuthSession(null)
         navigate('login', { replace: true })

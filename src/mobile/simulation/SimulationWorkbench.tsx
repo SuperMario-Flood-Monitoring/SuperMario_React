@@ -21,6 +21,7 @@ import {
   type SwmmRealtimeSnapshot,
   type SwmmScenario,
 } from '../../services/swmm/client'
+import { isDemoControlLocked } from '../../services/demoControlLock'
 import {
   clearSelectedSwmmScenarioId,
   loadSelectedSwmmScenarioId,
@@ -522,6 +523,8 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   const hasActiveSimulationLayout = loadedLayout.source === 'imported' || (
     loadedLayout.source === 'scenario' && selectedScenarioId !== null
   )
+  const demoControlLocked = isDemoControlLocked()
+  const demoControlLockedTitle = 'demo/admin 시연 모드에서는 엔진 제어를 변경할 수 없습니다.'
   const shouldShowScenarioPrompt = !status?.hasSession && !hasActiveSimulationLayout
   const exportLayout = useMemo(() => normalizeRelationAttachments(layout), [layout])
   const { nodesById } = useLayoutIndexes(exportLayout)
@@ -936,6 +939,9 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   }
 
   const startEngine = async () => {
+    if (demoControlLocked) {
+      return
+    }
     if (!hasActiveSimulationLayout) {
       setIsScenarioSettingsOpen(true)
       return
@@ -977,6 +983,9 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   }
 
   const stopEngine = async () => {
+    if (demoControlLocked) {
+      return
+    }
     if (isStopping) {
       return
     }
@@ -996,6 +1005,9 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   }
 
   const togglePauseEngine = async () => {
+    if (demoControlLocked) {
+      return
+    }
     if (isPausing || !status?.hasSession) {
       return
     }
@@ -1460,16 +1472,17 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
         <button
           type="button"
           onClick={startEngine}
-          disabled={isStarting || Boolean(status?.hasSession) || !hasActiveSimulationLayout}
-          title={!hasActiveSimulationLayout ? '시나리오 선택 후 엔진을 시작할 수 있습니다.' : '엔진 시작'}
-          className="rounded-md border border-emerald-200 bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700 disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-200 disabled:text-slate-500"
+          disabled={demoControlLocked || isStarting || Boolean(status?.hasSession) || !hasActiveSimulationLayout}
+          title={demoControlLocked ? demoControlLockedTitle : !hasActiveSimulationLayout ? '시나리오 선택 후 엔진을 시작할 수 있습니다.' : '엔진 시작'}
+          className="rounded-md border border-emerald-200 bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-200 disabled:text-slate-500"
         >
           {isStarting ? '시작 중' : '엔진 시작'}
         </button>
         <button
           type="button"
           onClick={togglePauseEngine}
-          disabled={isPausing || !status?.hasSession}
+          disabled={demoControlLocked || isPausing || !status?.hasSession}
+          title={demoControlLocked ? demoControlLockedTitle : status?.paused ? '엔진 재개' : '엔진 일시정지'}
           className={`rounded-md border px-3 py-2 text-xs font-black disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${
             status?.paused
               ? isDark ? 'border-emerald-900 bg-slate-900 text-emerald-200 hover:bg-emerald-950' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
@@ -1481,7 +1494,8 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
         <button
           type="button"
           onClick={stopEngine}
-          disabled={isStopping || !status?.hasSession}
+          disabled={demoControlLocked || isStopping || !status?.hasSession}
+          title={demoControlLocked ? demoControlLockedTitle : '엔진 정지'}
           className={`rounded-md border px-3 py-2 text-xs font-black text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${
             isDark ? 'border-rose-900 bg-slate-900 hover:bg-rose-950' : 'border-rose-200 bg-white'
           }`}
@@ -1526,9 +1540,9 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
           <button
             type="button"
             onClick={togglePauseEngine}
-            disabled={isPausing}
+            disabled={demoControlLocked || isPausing}
             aria-label={status.paused ? '엔진 재개' : '엔진 일시정지'}
-            title={status.paused ? '엔진 재개' : '엔진 일시정지'}
+            title={demoControlLocked ? demoControlLockedTitle : status.paused ? '엔진 재개' : '엔진 일시정지'}
             className={status.paused ? fullscreenResumeButtonClassName : fullscreenPauseButtonClassName}
           >
             {status.paused ? <PlayIcon /> : <PauseIcon />}
@@ -1536,9 +1550,9 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
           <button
             type="button"
             onClick={stopEngine}
-            disabled={isStopping}
+            disabled={demoControlLocked || isStopping}
             aria-label="엔진 정지"
-            title="엔진 정지"
+            title={demoControlLocked ? demoControlLockedTitle : '엔진 정지'}
             className={fullscreenStopButtonClassName}
           >
             <StopIcon />
@@ -1548,9 +1562,9 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
         <button
           type="button"
           onClick={startEngine}
-          disabled={isStarting || !hasActiveSimulationLayout}
+          disabled={demoControlLocked || isStarting || !hasActiveSimulationLayout}
           aria-label="엔진 시작"
-          title={!hasActiveSimulationLayout ? '시나리오 선택 후 엔진을 시작할 수 있습니다.' : '엔진 시작'}
+          title={demoControlLocked ? demoControlLockedTitle : !hasActiveSimulationLayout ? '시나리오 선택 후 엔진을 시작할 수 있습니다.' : '엔진 시작'}
           className={fullscreenPlayButtonClassName}
         >
           <PlayIcon />
