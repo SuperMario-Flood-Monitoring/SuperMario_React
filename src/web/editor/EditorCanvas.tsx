@@ -3070,6 +3070,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   const [isSavingScenario, setIsSavingScenario] = useState(false)
   const [isDeletingScenario, setIsDeletingScenario] = useState(false)
   const [scenarioError, setScenarioError] = useState<string | null>(null)
+  const suppressScenarioAutoRestoreRef = useRef(false)
 
   // ref는 브라우저 파일 입력, SVG 좌표 변환, 좌표 변경 후속 클릭 억제를 위해 사용한다.
   const copiedSelectionRef = useRef<CopiedEditorSelection | null>(null)
@@ -3319,7 +3320,11 @@ export const EditorCanvas = memo(function EditorCanvas({
         if (!currentScenario) {
           return null
         }
-        return nextScenarios.find((scenario) => scenario.id === currentScenario.id) ?? currentScenario
+        const nextSelectedScenario = nextScenarios.find((scenario) => scenario.id === currentScenario.id) ?? null
+        if (!nextSelectedScenario) {
+          clearSelectedSwmmScenarioId()
+        }
+        return nextSelectedScenario
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
@@ -3349,6 +3354,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     }
 
     const normalizedLayout = normalizeEditorLayout(scenario.layoutJson)
+    suppressScenarioAutoRestoreRef.current = false
     replaceLayout(normalizedLayout)
     setSelectedScenario(scenario)
     saveSelectedSwmmScenarioId(scenario.id)
@@ -3361,7 +3367,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   }, [replaceLayout, resetEditorInteractionState, scenarios])
 
   useEffect(() => {
-    if (selectedScenario || isScenarioEditMode || scenarios.length === 0) {
+    if (suppressScenarioAutoRestoreRef.current || selectedScenario || isScenarioEditMode || scenarios.length === 0) {
       return
     }
 
@@ -3388,6 +3394,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       return
     }
 
+    suppressScenarioAutoRestoreRef.current = false
     const scenarioId = Number(scenarioIdValue)
     if (!scenarioId) {
       clearSelectedSwmmScenarioId()
@@ -3537,9 +3544,10 @@ export const EditorCanvas = memo(function EditorCanvas({
     setScenarioError(null)
     try {
       await deleteSwmmScenario(SWMM_ENGINE_URL, scenarioToDelete.id)
+      suppressScenarioAutoRestoreRef.current = true
       setScenarios((currentScenarios) => currentScenarios.filter((scenario) => scenario.id !== scenarioToDelete.id))
-      setSelectedScenario(null)
       clearSelectedSwmmScenarioId()
+      setSelectedScenario(null)
       setScenarioEditBaseline(null)
       setScenarioCancelBaseline(null)
       setScenarioTitle('')

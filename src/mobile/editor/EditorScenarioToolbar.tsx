@@ -129,7 +129,7 @@ export function EditorScenarioToolbar({
           <div className="flex min-w-0 items-center gap-2">
             <span className={`shrink-0 text-sm font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>시나리오</span>
             <select
-              value={selectedScenario?.id ?? ''}
+              value={selectedScenario ? String(selectedScenario.id) : ''}
               onChange={(event) => onScenarioSelect(event.target.value)}
               disabled={isScenarioSelectionLocked || isLoadingScenarios || isSavingScenario}
               title={isScenarioSelectionLocked ? scenarioLockMessage : undefined}
