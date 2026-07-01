@@ -134,7 +134,7 @@ export function getManualResizableEdges(node: EditorNode): Record<ResizeEdge, bo
   }
 
   if (node.type === 'terrain') {
-    return { top: false, right: true, bottom: true, left: true }
+    return { top: false, right: false, bottom: false, left: false }
   }
 
   return getAttachResizableEdges(node)

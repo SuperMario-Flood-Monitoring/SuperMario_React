@@ -92,11 +92,11 @@ export function createEditorNode(type: EditorNodeType, index: number, groundSurf
     height: preset.height,
     ports: createEditorPorts(type, preset.width, preset.height),
     props: type === 'elbowConnector' || type === 'teeConnector'
-      ? { size: 'medium', rotation: 0, pipeKind: 'storm' }
+      ? { size: 'small', rotation: 0, pipeKind: 'storm' }
       : type === 'pipeSegment'
-        ? { size: 'medium', rotation: 0, pipeKind: 'storm' }
+        ? { size: 'small', rotation: 0, pipeKind: 'storm' }
       : type === 'connector'
-        ? { size: 'medium', pipeKind: 'storm' }
+        ? { size: 'small', pipeKind: 'storm' }
       : type === 'facility'
         ? { facilityKind: 'generic' }
         : type === 'outfall'

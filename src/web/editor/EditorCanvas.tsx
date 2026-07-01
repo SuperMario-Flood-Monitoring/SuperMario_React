@@ -116,7 +116,6 @@ import {
   getNodeRenderablePorts,
   getRenderedPortPoint,
   getRenderedPortPointFromLookup,
-  hasManualResizableEdge,
   type RenderedPortRelationLookup,
 } from './editorNodeRenderData'
 import {
@@ -181,6 +180,8 @@ import type {
   CopiedEditorSelection,
   DragState,
   LayoutAddSide,
+  LayoutSetOptions,
+  LayoutUpdate,
   MarqueeSelectionState,
   Point,
   RectBounds,
@@ -996,7 +997,7 @@ function createLink(layout: EditorLayout, from: EditorPortSelection, to: EditorP
     type: 'relation',
     from,
     to,
-    size: 'medium',
+    size: 'small',
     props: {
       route,
       slope: route === 'straight' ? 0.001154 : 0.03,
@@ -1544,6 +1545,188 @@ function rangesOverlap(firstStart: number, firstEnd: number, secondStart: number
   return Math.min(firstEnd, secondEnd) - Math.max(firstStart, secondStart) > 1
 }
 
+const TERRAIN_EDGE_CONTACT_EPSILON = 2
+const LOCKED_RESIZE_EDGES: Record<ResizeEdge, boolean> = { top: false, right: false, bottom: false, left: false }
+
+function hasAnyResizeEdge(edges: Record<ResizeEdge, boolean>) {
+  return edges.top || edges.right || edges.bottom || edges.left
+}
+
+function areTerrainVerticallyTouching(first: EditorNode, second: EditorNode) {
+  const firstBottom = first.y + first.height
+  const secondBottom = second.y + second.height
+
+  return (
+    Math.abs(firstBottom - second.y) <= TERRAIN_EDGE_CONTACT_EPSILON ||
+    Math.abs(secondBottom - first.y) <= TERRAIN_EDGE_CONTACT_EPSILON
+  )
+}
+
+function getTerrainHorizontalOverlap(first: EditorNode, second: EditorNode) {
+  return Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x)
+}
+
+function areTerrainColumnLinked(first: EditorNode, second: EditorNode) {
+  return areTerrainVerticallyTouching(first, second) && getTerrainHorizontalOverlap(first, second) > 1
+}
+
+function areTerrainHorizontallyTouching(first: EditorNode, second: EditorNode) {
+  const firstRight = first.x + first.width
+  const secondRight = second.x + second.width
+  const verticallyOverlaps = rangesOverlap(first.y, first.y + first.height, second.y, second.y + second.height)
+
+  return verticallyOverlaps && (
+    Math.abs(firstRight - second.x) <= TERRAIN_EDGE_CONTACT_EPSILON ||
+    Math.abs(secondRight - first.x) <= TERRAIN_EDGE_CONTACT_EPSILON
+  )
+}
+
+function areTerrainLayoutLinked(first: EditorNode, second: EditorNode) {
+  return areTerrainColumnLinked(first, second) || areTerrainHorizontallyTouching(first, second)
+}
+
+function getTerrainColumnSyncNodeIds(layout: EditorLayout, originNode: EditorNode) {
+  const syncNodeIds = new Set<string>([originNode.id])
+  const queue = [originNode]
+
+  while (queue.length > 0) {
+    const currentNode = queue.shift()!
+
+    layout.nodes.forEach((candidate) => {
+      if (
+        candidate.type !== 'terrain' ||
+        syncNodeIds.has(candidate.id) ||
+        !areTerrainColumnLinked(currentNode, candidate)
+      ) {
+        return
+      }
+
+      syncNodeIds.add(candidate.id)
+      queue.push(candidate)
+    })
+  }
+
+  return syncNodeIds
+}
+
+function getTerrainConnectedNodeIds(layout: EditorLayout, originNode: EditorNode) {
+  const connectedNodeIds = new Set<string>([originNode.id])
+  const queue = [originNode]
+
+  while (queue.length > 0) {
+    const currentNode = queue.shift()!
+
+    layout.nodes.forEach((candidate) => {
+      if (
+        candidate.type !== 'terrain' ||
+        connectedNodeIds.has(candidate.id) ||
+        !areTerrainLayoutLinked(currentNode, candidate)
+      ) {
+        return
+      }
+
+      connectedNodeIds.add(candidate.id)
+      queue.push(candidate)
+    })
+  }
+
+  return connectedNodeIds
+}
+
+function canDeleteEditorNode(layout: EditorLayout, node: EditorNode) {
+  if (node.type !== 'terrain') {
+    return true
+  }
+
+  const connectedTerrainIds = getTerrainConnectedNodeIds(layout, node)
+  const latestConnectedTerrain = [...layout.nodes]
+    .reverse()
+    .find((candidate) => candidate.type === 'terrain' && connectedTerrainIds.has(candidate.id))
+
+  return latestConnectedTerrain?.id === node.id
+}
+
+function canDeleteEditorNodeIds(layout: EditorLayout, nodeIds: Iterable<string>) {
+  const nodeIdSet = new Set(nodeIds)
+
+  return layout.nodes.every((node) => (
+    !nodeIdSet.has(node.id) || canDeleteEditorNode(layout, node)
+  ))
+}
+
+function getBestAdjacentTerrainRight(layout: EditorLayout, targetNode: EditorNode) {
+  let bestRight: number | null = null
+  let bestOverlap = 0
+
+  layout.nodes.forEach((candidate) => {
+    if (candidate.id === targetNode.id || candidate.type !== 'terrain' || !areTerrainColumnLinked(targetNode, candidate)) {
+      return
+    }
+
+    const overlap = getTerrainHorizontalOverlap(targetNode, candidate)
+    const candidateRight = candidate.x + candidate.width
+    if (overlap > bestOverlap) {
+      bestRight = candidateRight
+      bestOverlap = overlap
+    }
+  })
+
+  return bestRight
+}
+
+function getLayoutAwareManualResizableEdges(layout: EditorLayout, node: EditorNode): Record<ResizeEdge, boolean> {
+  if (node.type !== 'terrain') {
+    return getManualResizableEdges(node)
+  }
+
+  let hasSideNeighbor = false
+  let hasVerticalNeighbor = false
+  const left = node.x
+  const right = node.x + node.width
+  const top = node.y
+  const bottom = node.y + node.height
+
+  layout.nodes.forEach((candidate) => {
+    if (candidate.id === node.id || candidate.type !== 'terrain') {
+      return
+    }
+
+    const candidateLeft = candidate.x
+    const candidateRight = candidate.x + candidate.width
+    const candidateTop = candidate.y
+    const candidateBottom = candidate.y + candidate.height
+    const verticallyOverlaps = rangesOverlap(top, bottom, candidateTop, candidateBottom)
+    const horizontallyOverlaps = rangesOverlap(left, right, candidateLeft, candidateRight)
+
+    if (
+      verticallyOverlaps &&
+      (
+        Math.abs(candidateRight - left) <= TERRAIN_EDGE_CONTACT_EPSILON ||
+        Math.abs(candidateLeft - right) <= TERRAIN_EDGE_CONTACT_EPSILON
+      )
+    ) {
+      hasSideNeighbor = true
+    }
+
+    if (
+      horizontallyOverlaps &&
+      (
+        Math.abs(candidateBottom - top) <= TERRAIN_EDGE_CONTACT_EPSILON ||
+        Math.abs(candidateTop - bottom) <= TERRAIN_EDGE_CONTACT_EPSILON
+      )
+    ) {
+      hasVerticalNeighbor = true
+    }
+  })
+
+  return {
+    top: false,
+    left: false,
+    right: !hasVerticalNeighbor,
+    bottom: !hasSideNeighbor,
+  }
+}
+
 function applyTerrainResizeChain(layout: EditorLayout, originNode: EditorNode, resizedNode: EditorNode): EditorLayout {
   if (originNode.type !== 'terrain' || resizedNode.type !== 'terrain') {
     return {
@@ -1559,6 +1742,9 @@ function applyTerrainResizeChain(layout: EditorLayout, originNode: EditorNode, r
   const leftDelta = resizedNode.x - originNode.x
   const rightDelta = resizedRight - originRight
   const bottomDelta = resizedBottom - originBottom
+  const columnSyncNodeIds = rightDelta !== 0
+    ? getTerrainColumnSyncNodeIds(layout, originNode)
+    : new Set<string>()
 
   return {
     ...layout,
@@ -1569,6 +1755,13 @@ function applyTerrainResizeChain(layout: EditorLayout, originNode: EditorNode, r
 
       if (node.type !== 'terrain') {
         return node
+      }
+
+      if (rightDelta !== 0 && columnSyncNodeIds.has(node.id)) {
+        return normalizeNodePorts({
+          ...node,
+          width: Math.max(MIN_TERRAIN_WIDTH, resizedRight - node.x),
+        })
       }
 
       const verticallyOverlaps = rangesOverlap(originNode.y, originBottom, node.y, node.y + node.height)
@@ -2109,8 +2302,11 @@ function getDefaultLengthResizeEdge(node: EditorNode): ResizeEdge | null {
 }
 
 /** 모바일 버튼식 resize에서 우선 조작할 edge를 고른다. */
-function getPreferredMobileResizeEdge(node: EditorNode): ResizeEdge | null {
-  const edges = getManualResizableEdges(node)
+function getPreferredMobileResizeEdge(
+  node: EditorNode,
+  resizeEdges: Record<ResizeEdge, boolean> = getManualResizableEdges(node),
+): ResizeEdge | null {
+  const edges = resizeEdges
   const orientation = node.type === 'pipeSegment' ? getNodeOrientation(node) : null
 
   if (orientation === 'horizontal') {
@@ -2136,8 +2332,11 @@ function getPreferredMobileResizeEdge(node: EditorNode): ResizeEdge | null {
   return edges.top ? 'top' : null
 }
 
-function getMobileResizeCapability(node: EditorNode) {
-  const edges = getManualResizableEdges(node)
+function getMobileResizeCapability(
+  node: EditorNode,
+  resizeEdges: Record<ResizeEdge, boolean> = getManualResizableEdges(node),
+) {
+  const edges = resizeEdges
   const horizontalEdge: ResizeEdge | null = edges.right ? 'right' : edges.left ? 'left' : null
   const verticalEdge: ResizeEdge | null = edges.bottom ? 'bottom' : edges.top ? 'top' : null
 
@@ -2146,7 +2345,7 @@ function getMobileResizeCapability(node: EditorNode) {
     canResizeY: Boolean(verticalEdge),
     horizontalEdge,
     verticalEdge,
-    preferredEdge: getPreferredMobileResizeEdge(node),
+    preferredEdge: getPreferredMobileResizeEdge(node, edges),
   }
 }
 
@@ -3018,7 +3217,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   const isDark = theme === 'dark'
   const themeTokens = WORKBENCH_THEME_TOKENS[theme]
   // layout hook은 localStorage 저장, undo/redo history, batch 기록을 한곳에서 관리한다.
-  const [layout, setLayout, layoutHistory] = useEditorLayoutState(normalizeEditorLayout)
+  const [layout, rawSetLayout, layoutHistory] = useEditorLayoutState(normalizeEditorLayout)
   const {
     beginLayoutHistoryBatch,
     commitLayoutHistoryBatch,
@@ -3186,6 +3385,21 @@ export const EditorCanvas = memo(function EditorCanvas({
     showEditorToast('시나리오 수정 버튼을 누른 뒤 편집할 수 있습니다.')
     return true
   }, [showEditorToast])
+
+  const setLayout = useCallback((update: LayoutUpdate, options: LayoutSetOptions = {}) => {
+    if (!selectedScenario && !isScenarioEditMode) {
+      suppressScenarioAutoRestoreRef.current = true
+      clearSelectedSwmmScenarioId()
+      const baseline = normalizeEditorLayout(layout)
+      setScenarioCancelBaseline((currentBaseline) => currentBaseline ?? baseline)
+      setScenarioEditBaseline((currentBaseline) => currentBaseline ?? baseline)
+      setScenarioTitle((currentTitle) => currentTitle || '새 시나리오')
+      setScenarioDescription((currentDescription) => currentDescription)
+      setIsScenarioEditMode(true)
+    }
+
+    rawSetLayout(update, options)
+  }, [isScenarioEditMode, layout, rawSetLayout, selectedScenario])
 
   useEffect(() => {
     isScenarioReadOnlyRef.current = isScenarioReadOnly
@@ -3741,6 +3955,18 @@ export const EditorCanvas = memo(function EditorCanvas({
       (link) => link.from.nodeId === selectedNode.id || link.to.nodeId === selectedNode.id,
     )
   }, [layout.links, selectedNode])
+  const canDeleteCurrentSelection = useMemo(() => {
+    if (!selection) {
+      return false
+    }
+
+    if (selection.kind === 'link') {
+      return true
+    }
+
+    const selectedNodeIdsForDelete = selection.kind === 'multi' ? selection.ids : [selection.id]
+    return canDeleteEditorNodeIds(layout, selectedNodeIdsForDelete)
+  }, [layout, selection])
 
   // 이미 relation이 붙은 포트는 파란색으로 표시해야 하므로 endpoint key를 모아둔다.
   const connectedPortKeys = useMemo(() => {
@@ -3917,13 +4143,21 @@ export const EditorCanvas = memo(function EditorCanvas({
         updates.height !== undefined
       ),
     )
+    const focusTerrainResizeEdges = currentNodeForFocus?.type === 'terrain'
+      ? getLayoutAwareManualResizableEdges(layout, currentNodeForFocus)
+      : null
     const focusTargetNode = currentNodeForFocus && shouldFocusAfterUpdate
       ? snapNodeToGround(
         normalizeNodePorts({
           ...currentNodeForFocus,
           ...updates,
           ...(currentNodeForFocus.type === 'terrain'
-            ? { x: currentNodeForFocus.x, y: currentNodeForFocus.y }
+            ? {
+                x: currentNodeForFocus.x,
+                y: currentNodeForFocus.y,
+                ...(focusTerrainResizeEdges?.right ? {} : { width: currentNodeForFocus.width }),
+                ...(focusTerrainResizeEdges?.bottom ? {} : { height: currentNodeForFocus.height }),
+              }
             : {}),
         }),
         layout.groundSurfaceY,
@@ -3936,12 +4170,20 @@ export const EditorCanvas = memo(function EditorCanvas({
         return currentLayout
       }
 
+      const terrainResizeEdges = currentNode.type === 'terrain'
+        ? getLayoutAwareManualResizableEdges(currentLayout, currentNode)
+        : null
       const nextNode = snapNodeToGround(
         normalizeNodePorts({
           ...currentNode,
           ...updates,
           ...(currentNode.type === 'terrain'
-            ? { x: currentNode.x, y: currentNode.y }
+            ? {
+                x: currentNode.x,
+                y: currentNode.y,
+                ...(terrainResizeEdges?.right ? {} : { width: currentNode.width }),
+                ...(terrainResizeEdges?.bottom ? {} : { height: currentNode.height }),
+              }
             : {}),
         }),
         currentLayout.groundSurfaceY,
@@ -3999,7 +4241,7 @@ export const EditorCanvas = memo(function EditorCanvas({
         return currentLayout
       }
 
-      if (!getManualResizableEdges(currentNode)[edge]) {
+      if (!getLayoutAwareManualResizableEdges(currentLayout, currentNode)[edge]) {
         return currentLayout
       }
 
@@ -4151,6 +4393,11 @@ export const EditorCanvas = memo(function EditorCanvas({
       return
     }
 
+    if (!canDeleteCurrentSelection) {
+      showEditorToast('마지막 레이아웃부터 삭제할 수 있습니다.')
+      return
+    }
+
     setLayout((currentLayout) => {
       if (selection.kind === 'link') {
         return {
@@ -4184,7 +4431,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     setCoordinateEditState(null)
     setMarqueeSelectionState(null)
     setSelection(null)
-  }, [blockReadOnlyScenarioAction, selection, setLayout])
+  }, [blockReadOnlyScenarioAction, canDeleteCurrentSelection, selection, setLayout, showEditorToast])
 
   // undo/redo나 pointer 종료 전에 임시 인터랙션 상태를 닫고 history batch를 확정한다.
   const clearTransientEditorState = useCallback(() => {
@@ -5360,7 +5607,7 @@ export const EditorCanvas = memo(function EditorCanvas({
       return
     }
 
-    if (!getManualResizableEdges(node)[edge]) {
+    if (!getLayoutAwareManualResizableEdges(layout, node)[edge]) {
       return
     }
 
@@ -5514,7 +5761,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     setLayout((currentLayout) => {
       const row = currentLayout.nodes.length % 5
       const x = point ? point.x - 160 : 180 + row * 70
-      const y = point ? point.y - (PIPE_THICKNESS.medium + PIPE_BORDER.medium * 2) / 2 : currentLayout.groundSurfaceY + 270 + row * 28
+      const y = point ? point.y - (PIPE_THICKNESS.small + PIPE_BORDER.small * 2) / 2 : currentLayout.groundSurfaceY + 270 + row * 28
       const pipeNode: EditorNode = {
         id: pipeId,
         swmmId: pipeId,
@@ -5523,10 +5770,10 @@ export const EditorCanvas = memo(function EditorCanvas({
         x,
         y,
         width: 320,
-        height: PIPE_THICKNESS.medium + PIPE_BORDER.medium * 2,
+        height: PIPE_THICKNESS.small + PIPE_BORDER.small * 2,
         ports: CONNECTOR_PORTS,
         props: {
-          size: 'medium',
+          size: 'small',
           rotation: 0,
           pipeKind: DEFAULT_PIPE_KIND,
           slope: 0.001154,
@@ -5545,7 +5792,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     setCoordinateEditState(null)
   }
 
-  // 레이아웃 + 핸들에서 땅/하천/바다 terrain을 기존 레이아웃과 같은 높이로 체인 추가한다.
+  // 레이아웃 + 핸들에서 땅/하천/바다 terrain을 기준 면의 축 길이에 맞춰 체인 추가한다.
   const addLayoutNode = (kind: LayoutAddKind, source: ContextMenuState['layoutAdd']) => {
     if (blockReadOnlyScenarioAction()) {
       return
@@ -5559,23 +5806,35 @@ export const EditorCanvas = memo(function EditorCanvas({
     const createdNode = normalizeNodeGeometryForPipePreset(
       createEditorNode(nodeType, nextNodeIndex, layout.groundSurfaceY),
     )
-    const sourceWidth = Math.max(80, source.bounds.right - source.bounds.left)
-    const baseTerrainHeight = Math.max(MIN_TERRAIN_HEIGHT, canvasHeight - layout.groundSurfaceY)
-    const width = Math.max(
-      MIN_TERRAIN_WIDTH,
-      source.side === 'bottom'
-        ? sourceWidth
-        : Math.min(Math.max(sourceWidth, createdNode.width), 1400),
-    )
-    const height = baseTerrainHeight
+    const sourceWidth = Math.max(1, source.bounds.right - source.bounds.left)
+    const sourceHeight = Math.max(1, source.bounds.bottom - source.bounds.top)
+    const defaultLayoutWidth = Math.max(1, EDITOR_CANVAS_WIDTH)
+    const defaultLayoutHeight = Math.max(1, EDITOR_CANVAS_HEIGHT - layout.groundSurfaceY)
+    const draftWidth = source.side === 'bottom'
+      ? sourceWidth
+      : Math.min(defaultLayoutWidth, sourceWidth)
+    const height = source.side === 'bottom'
+      ? defaultLayoutHeight
+      : Math.min(defaultLayoutHeight, sourceHeight)
     const x = source.side === 'left'
-      ? source.bounds.left - width
+      ? source.bounds.left - draftWidth
       : source.side === 'right'
         ? source.bounds.right
         : source.bounds.left
     const y = source.side === 'bottom'
       ? source.bounds.bottom
       : source.bounds.top
+    const draftNode = {
+      ...createdNode,
+      x,
+      y,
+      width: draftWidth,
+      height,
+    }
+    const adjacentRight = getBestAdjacentTerrainRight(layout, draftNode)
+    const width = adjacentRight !== null
+      ? Math.max(MIN_TERRAIN_WIDTH, adjacentRight - x)
+      : draftWidth
     const props: Record<string, string | number | boolean> = { terrainKind: kind }
     const nodeName = `${TERRAIN_KIND_BY_ID[kind].nodeName} ${nextNodeIndex}`
     const nextNode = normalizeNodePorts({
@@ -5967,6 +6226,10 @@ export const EditorCanvas = memo(function EditorCanvas({
     </div>
   ) : null
   const layoutJsonText = useMemo(() => JSON.stringify(layout, null, 2), [layout])
+  const selectedNodeResizeEdges = useMemo(
+    () => selectedNode ? getLayoutAwareManualResizableEdges(layout, selectedNode) : LOCKED_RESIZE_EDGES,
+    [layout, selectedNode],
+  )
   const editorInfoPanelContent = (
     <>
       {hasSelection ? (
@@ -6020,6 +6283,9 @@ export const EditorCanvas = memo(function EditorCanvas({
               link={selectedLink}
               connectedLinks={selectedConnectedLinks}
               groundSurfaceY={layout.groundSurfaceY}
+              terrainCanResizeWidth={selectedNodeResizeEdges.right}
+              terrainCanResizeHeight={selectedNodeResizeEdges.bottom}
+              canDeleteSelection={canDeleteCurrentSelection}
               onUpdateNode={updateNode}
               onRotateNode={rotateNodeClockwise}
               onUpdateLink={updateLink}
@@ -6366,7 +6632,12 @@ export const EditorCanvas = memo(function EditorCanvas({
     </div>
   ) : null
   const mobileActiveEditorNode = mobileActiveNodeId ? nodesById.get(mobileActiveNodeId) ?? null : null
-  const mobileResizeCapability = mobileActiveEditorNode ? getMobileResizeCapability(mobileActiveEditorNode) : null
+  const mobileActiveResizeEdges = mobileActiveEditorNode
+    ? getLayoutAwareManualResizableEdges(layout, mobileActiveEditorNode)
+    : LOCKED_RESIZE_EDGES
+  const mobileResizeCapability = mobileActiveEditorNode
+    ? getMobileResizeCapability(mobileActiveEditorNode, mobileActiveResizeEdges)
+    : null
   const mobileMoveCapability = mobileActiveEditorNode ? getMobileMoveCapability(layout, mobileActiveEditorNode) : null
   const mobileResizeButtonClassName = isDark
     ? 'border-blue-400/40 bg-blue-500/15 text-blue-100 active:bg-blue-500/25'
@@ -6692,12 +6963,18 @@ export const EditorCanvas = memo(function EditorCanvas({
       return null
     }
 
+    const resizeEdges = getLayoutAwareManualResizableEdges(layout, node)
+    if (!hasAnyResizeEdge(resizeEdges)) {
+      return null
+    }
+
     return (
       <g className={isMobileInput ? '[&>rect]:opacity-100' : undefined}>
-        <PipeResizeHandles node={node} onResizePointerDown={onResizePointerDown} />
+        <PipeResizeHandles node={node} resizeEdges={resizeEdges} onResizePointerDown={onResizePointerDown} />
       </g>
     )
-  }, [isMobileInput])
+  }, [isMobileInput, layout])
+  const contextMenuNode = contextMenu?.nodeId ? nodesById.get(contextMenu.nodeId) ?? null : null
 
   return (
     <>
@@ -6843,7 +7120,7 @@ export const EditorCanvas = memo(function EditorCanvas({
               coordinateEditActive={Boolean(coordinateEditState)}
               getRenderablePorts={getNodeRenderablePorts}
               getRenderedPortPoint={getRenderedPortPointFromLookup}
-              hasManualResizableEdge={hasManualResizableEdge}
+              hasManualResizableEdge={(node) => hasAnyResizeEdge(getLayoutAwareManualResizableEdges(layout, node))}
               renderResizeHandles={renderResizeHandles}
               onPointerDown={handleNodePointerDown}
               onPointerEnter={handleNodePointerEnter}
@@ -6901,7 +7178,7 @@ export const EditorCanvas = memo(function EditorCanvas({
               coordinateEditActive={Boolean(coordinateEditState)}
               getRenderablePorts={getNodeRenderablePorts}
               getRenderedPortPoint={getRenderedPortPointFromLookup}
-              hasManualResizableEdge={hasManualResizableEdge}
+              hasManualResizableEdge={(node) => hasAnyResizeEdge(getLayoutAwareManualResizableEdges(layout, node))}
               renderResizeHandles={renderResizeHandles}
               onPointerDown={handleNodePointerDown}
               onPointerEnter={handleNodePointerEnter}
@@ -7025,6 +7302,11 @@ export const EditorCanvas = memo(function EditorCanvas({
           contextMenu.nodeId && canNodeStartRelation(nodesById.get(contextMenu.nodeId)),
         )}
         canDetachNodeParentRelation={Boolean(contextMenu.nodeId && hasParentRelationForNode(contextMenu.nodeId))}
+        canStartNodeMove={Boolean(contextMenuNode && contextMenuNode.type !== 'terrain')}
+        canStartNodeResize={Boolean(
+          contextMenuNode && hasAnyResizeEdge(getLayoutAwareManualResizableEdges(layout, contextMenuNode)),
+        )}
+        canDeleteSelection={contextMenuNode ? canDeleteEditorNode(layout, contextMenuNode) : canDeleteCurrentSelection}
         isMobileSheet={isMobileInput}
         theme={theme}
         onOpenInfoPanel={() => {
@@ -7073,7 +7355,12 @@ export const EditorCanvas = memo(function EditorCanvas({
           }
         }}
         onStartNodeResize={() => {
-          if (contextMenu.nodeId) {
+          const contextNode = contextMenu.nodeId ? nodesById.get(contextMenu.nodeId) : null
+          if (
+            contextMenu.nodeId &&
+            contextNode &&
+            hasAnyResizeEdge(getLayoutAwareManualResizableEdges(layout, contextNode))
+          ) {
             setRelationPreviewNodeId(null)
             setSelection({ kind: 'node', id: contextMenu.nodeId })
             mobileMoveArmedNodeIdRef.current = null

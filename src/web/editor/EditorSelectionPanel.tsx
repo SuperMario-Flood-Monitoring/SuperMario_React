@@ -81,6 +81,9 @@ export function SelectionPanel({
   link,
   connectedLinks,
   groundSurfaceY,
+  terrainCanResizeWidth = false,
+  terrainCanResizeHeight = false,
+  canDeleteSelection = true,
   onUpdateNode,
   onRotateNode,
   onUpdateLink,
@@ -93,6 +96,9 @@ export function SelectionPanel({
   link: EditorLink | null
   connectedLinks: EditorLink[]
   groundSurfaceY: number
+  terrainCanResizeWidth?: boolean
+  terrainCanResizeHeight?: boolean
+  canDeleteSelection?: boolean
   onUpdateNode: (nodeId: string, updates: Partial<EditorNode>) => void
   onRotateNode: (nodeId: string) => void
   onUpdateLink: (linkId: string, updates: Partial<Omit<EditorLink, 'props'>>) => void
@@ -171,7 +177,7 @@ export function SelectionPanel({
           <h3 className="text-sm font-black">선택 객체</h3>
           <button
             type="button"
-            disabled={readOnly}
+            disabled={readOnly || !canDeleteSelection}
             onClick={onDeleteSelection}
             className={`rounded-md border px-2 py-1 text-xs font-black ${deleteButtonClassName} ${disabledButtonClassName}`}
           >
@@ -351,7 +357,7 @@ export function SelectionPanel({
             theme={theme}
             label="가로"
             value={node.width}
-            disabled={readOnly}
+            disabled={readOnly || (isTerrainPositionLocked && !terrainCanResizeWidth)}
             onChange={(value) => onUpdateNode(node.id, { width: Math.max(minNodeWidth, value) })}
           />
           <NumberField
@@ -359,7 +365,7 @@ export function SelectionPanel({
             label="세로"
             value={node.height}
             min={minNodeHeight}
-            disabled={readOnly || node.type === 'road'}
+            disabled={readOnly || node.type === 'road' || (isTerrainPositionLocked && !terrainCanResizeHeight)}
             onChange={(value) => onUpdateNode(node.id, { height: Math.max(minNodeHeight, value) })}
           />
         </div>
@@ -413,7 +419,7 @@ export function SelectionPanel({
           <h3 className="text-sm font-black">선택 링크</h3>
           <button
             type="button"
-            disabled={readOnly}
+            disabled={readOnly || !canDeleteSelection}
             onClick={onDeleteSelection}
             className={`rounded-md border px-2 py-1 text-xs font-black ${deleteButtonClassName} ${disabledButtonClassName}`}
           >

@@ -144,13 +144,15 @@ function ResizeHandleRect({
 /** 파이프/맨홀/지형/도로의 수동 resize handle을 렌더링한다. */
 export function PipeResizeHandles({
   node,
+  resizeEdges,
   onResizePointerDown,
 }: {
   node: EditorNode
+  resizeEdges?: Record<ResizeEdge, boolean>
   onResizePointerDown: (node: EditorNode, edge: ResizeEdge, event: ReactPointerEvent<SVGRectElement>) => void
 }) {
   const hitSize = RESIZE_BORDER_HIT_SIZE
-  const edges = getManualResizableEdges(node)
+  const edges = resizeEdges ?? getManualResizableEdges(node)
 
   if (node.type === 'pipeSegment') {
     const isHorizontal = getNodeOrientation(node) === 'horizontal'

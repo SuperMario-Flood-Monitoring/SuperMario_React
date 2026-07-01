@@ -20,6 +20,9 @@ export function EditorContextMenu({
   canStartNodeRelation,
   canDetachNodeParentRelation,
   canOpenNodeKindSheet,
+  canStartNodeMove = true,
+  canStartNodeResize = true,
+  canDeleteSelection = true,
   nodeKindSheetLabel = '객체 종류 변경',
   isMobileSheet = false,
   theme = 'light',
@@ -44,6 +47,9 @@ export function EditorContextMenu({
   canStartNodeRelation?: boolean
   canDetachNodeParentRelation?: boolean
   canOpenNodeKindSheet?: boolean
+  canStartNodeMove?: boolean
+  canStartNodeResize?: boolean
+  canDeleteSelection?: boolean
   nodeKindSheetLabel?: string
   isMobileSheet?: boolean
   theme?: WorkbenchTheme
@@ -212,37 +218,45 @@ export function EditorContextMenu({
           관계 해제
         </button>
       ) : null}
-      <button
-        type="button"
-        onClick={() => {
-          onStartNodeMove?.()
-          onClose()
-        }}
-        className={`block w-full px-5 py-3 text-left text-base font-black ${blueItemClassName}`}
-      >
-        객체이동
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          onStartNodeResize?.()
-          onClose()
-        }}
-        className={`block w-full px-5 py-3 text-left text-base font-black ${blueItemClassName}`}
-      >
-        크기 조절
-      </button>
-      <div className={`my-1 border-t ${dividerClassName}`} />
-      <button
-        type="button"
-        onClick={() => {
-          onDeleteSelection?.()
-          onClose()
-        }}
-        className={`block w-full px-5 py-3 text-left text-base font-black ${roseItemClassName}`}
-      >
-        객체 삭제
-      </button>
+      {canStartNodeMove ? (
+        <button
+          type="button"
+          onClick={() => {
+            onStartNodeMove?.()
+            onClose()
+          }}
+          className={`block w-full px-5 py-3 text-left text-base font-black ${blueItemClassName}`}
+        >
+          객체이동
+        </button>
+      ) : null}
+      {canStartNodeResize ? (
+        <button
+          type="button"
+          onClick={() => {
+            onStartNodeResize?.()
+            onClose()
+          }}
+          className={`block w-full px-5 py-3 text-left text-base font-black ${blueItemClassName}`}
+        >
+          크기 조절
+        </button>
+      ) : null}
+      {canDeleteSelection ? (
+        <>
+          <div className={`my-1 border-t ${dividerClassName}`} />
+          <button
+            type="button"
+            onClick={() => {
+              onDeleteSelection?.()
+              onClose()
+            }}
+            className={`block w-full px-5 py-3 text-left text-base font-black ${roseItemClassName}`}
+          >
+            객체 삭제
+          </button>
+        </>
+      ) : null}
     </>
   )
 
