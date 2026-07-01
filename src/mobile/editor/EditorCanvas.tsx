@@ -4654,6 +4654,16 @@ export const EditorCanvas = memo(function EditorCanvas({
     if (hasVisibleBaseGround && isPointInsideRectBounds(cursor, baseGroundBounds)) {
       const baseGroundNode = createSelectableBaseGroundNode()
       if (baseGroundNode) {
+        if (
+          pendingPort &&
+          isMobileInput &&
+          (event.pointerType === 'touch' || event.pointerType === 'pen')
+        ) {
+          clearLongPressTimer()
+          setContextMenu(null)
+          return
+        }
+
         event.preventDefault()
         clearLongPressTimer()
         setPendingPort(null)
@@ -4724,6 +4734,12 @@ export const EditorCanvas = memo(function EditorCanvas({
           startClientX: event.clientX,
           startClientY: event.clientY,
         }
+        return
+      }
+
+      if (pendingPort) {
+        clearLongPressTimer()
+        setContextMenu(null)
         return
       }
 
@@ -5601,6 +5617,16 @@ export const EditorCanvas = memo(function EditorCanvas({
     }
 
     if (node.type === 'terrain') {
+      if (
+        pendingPort &&
+        isMobileInput &&
+        (event.pointerType === 'touch' || event.pointerType === 'pen')
+      ) {
+        clearLongPressTimer()
+        setContextMenu(null)
+        return
+      }
+
       event.preventDefault()
       setPendingPort(null)
       setAttachTargetNodeId(null)
