@@ -99,7 +99,7 @@ function extractDetailPayload(payload: unknown): NotificationChatRecord {
     }
   }
 
-  throw new Error('알림 채팅방 응답 형식이 올바르지 않습니다.')
+  throw new Error('알림 등록 응답 형식이 올바르지 않습니다.')
 }
 
 export async function listNotificationChats() {

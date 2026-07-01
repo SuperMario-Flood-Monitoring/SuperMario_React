@@ -72,8 +72,8 @@ function NotificationChatModalFallback({ theme, onClose }: { theme: WorkbenchThe
       >
         <header className={`flex items-start justify-between gap-4 border-b p-5 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
           <div>
-            <h2 id="notification-chat-modal-fallback-title" className="text-lg font-black">알림 채팅방</h2>
-            <p className={`mt-1 text-sm font-semibold ${mutedTextClass}`}>채팅방 목록 확인 중</p>
+            <h2 id="notification-chat-modal-fallback-title" className="text-lg font-black">알림 등록</h2>
+            <p className={`mt-1 text-sm font-semibold ${mutedTextClass}`}>등록 목록 확인 중</p>
           </div>
           <button
             type="button"
@@ -201,7 +201,7 @@ export function DrainageWorkbench({
           onClick={() => setIsNotificationModalOpen(true)}
           className={`${actionButtonClassName} ${themeTokens.buttonMuted}`}
         >
-          알림 채팅방
+          알림 등록
         </button>
         {onLogout ? (
           <button

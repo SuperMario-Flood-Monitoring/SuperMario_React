@@ -22,7 +22,7 @@ function delay(ms: number) {
 
 function NotificationChatSkeletonList({ isDark }: { isDark: boolean }) {
   return (
-    <div className="space-y-3" aria-label="알림 채팅방 목록 로딩 중">
+    <div className="space-y-3" aria-label="알림 등록 목록 로딩 중">
       {Array.from({ length: 3 }).map((_, index) => (
         <div
           key={index}
@@ -84,7 +84,7 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
         await waitForMinimumLoadingTime()
 
         if (isMounted) {
-          setError(loadError instanceof Error ? loadError.message : '알림 채팅방 목록을 불러오지 못했습니다.')
+          setError(loadError instanceof Error ? loadError.message : '알림 등록 목록을 불러오지 못했습니다.')
         }
       } finally {
         if (isMounted) {
@@ -128,7 +128,7 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
       setError('')
       setIsAdding(false)
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : '알림 채팅방을 추가하지 못했습니다.')
+      setError(createError instanceof Error ? createError.message : '알림 등록을 추가하지 못했습니다.')
     } finally {
       setIsSubmitting(false)
     }
@@ -143,7 +143,7 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
       ))
       setError('')
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : '알림 채팅방을 삭제하지 못했습니다.')
+      setError(deleteError instanceof Error ? deleteError.message : '알림 등록을 삭제하지 못했습니다.')
     } finally {
       setDeletingId(null)
     }
@@ -164,10 +164,10 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
         <header className={`flex items-start justify-between gap-4 border-b p-5 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
           <div>
             <h2 id="notification-chat-modal-title" className="text-lg font-black">
-              알림 채팅방
+              알림 등록
             </h2>
             <p className={`mt-1 text-sm font-semibold ${mutedTextClass}`}>
-              {isLoading ? '채팅방 목록 확인 중' : `등록된 채팅방 ${notificationChats.length}개`}
+              {isLoading ? '등록 목록 확인 중' : `등록된 알림 ${notificationChats.length}개`}
             </p>
           </div>
           <button
@@ -191,7 +191,7 @@ export function NotificationChatModal({ theme, onClose }: NotificationChatModalP
               <NotificationChatSkeletonList isDark={isDark} />
             ) : notificationChats.length === 0 ? (
               <div className={`rounded-lg border p-5 text-center ${subtlePanelClass}`}>
-                <p className="text-sm font-black">등록된 채팅방이 없습니다.</p>
+                <p className="text-sm font-black">등록된 알림이 없습니다.</p>
               </div>
             ) : (
               notificationChats.map((item) => (
