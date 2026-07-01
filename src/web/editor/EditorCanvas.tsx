@@ -138,6 +138,7 @@ import { useEditorLayoutState } from './useEditorLayoutState'
 import { EditableNodeLayer } from './EditableNodeLayer'
 import {
   createSwmmScenario,
+  deleteSwmmScenario,
   getSwmmScenarios,
   joinSwmmApiUrl,
   updateSwmmScenario,
@@ -3067,6 +3068,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   const [scenarioDescription, setScenarioDescription] = useState('')
   const [isLoadingScenarios, setIsLoadingScenarios] = useState(false)
   const [isSavingScenario, setIsSavingScenario] = useState(false)
+  const [isDeletingScenario, setIsDeletingScenario] = useState(false)
   const [scenarioError, setScenarioError] = useState<string | null>(null)
 
   // ref는 브라우저 파일 입력, SVG 좌표 변환, 좌표 변경 후속 클릭 억제를 위해 사용한다.
@@ -3513,6 +3515,44 @@ export const EditorCanvas = memo(function EditorCanvas({
       window.alert(`시나리오 저장에 실패했습니다.\n\n${message}`)
     } finally {
       setIsSavingScenario(false)
+    }
+  }
+
+  const deleteScenario = async () => {
+    if (isSavingScenario || isDeletingScenario || !selectedScenario) {
+      return
+    }
+    if (demoControlLocked) {
+      showEditorToast(demoScenarioLockMessage)
+      return
+    }
+
+    const scenarioToDelete = selectedScenario
+    const confirmed = window.confirm(`시나리오 "${scenarioToDelete.title}"을 삭제할까요?`)
+    if (!confirmed) {
+      return
+    }
+
+    setIsDeletingScenario(true)
+    setScenarioError(null)
+    try {
+      await deleteSwmmScenario(SWMM_ENGINE_URL, scenarioToDelete.id)
+      setScenarios((currentScenarios) => currentScenarios.filter((scenario) => scenario.id !== scenarioToDelete.id))
+      setSelectedScenario(null)
+      clearSelectedSwmmScenarioId()
+      setScenarioEditBaseline(null)
+      setScenarioCancelBaseline(null)
+      setScenarioTitle('')
+      setScenarioDescription('')
+      setIsScenarioEditMode(false)
+      resetEditorInteractionState()
+      showEditorToast('시나리오를 삭제했습니다.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      setScenarioError(message)
+      window.alert(`시나리오 삭제에 실패했습니다.\n\n${message}`)
+    } finally {
+      setIsDeletingScenario(false)
     }
   }
 
@@ -5849,11 +5889,13 @@ export const EditorCanvas = memo(function EditorCanvas({
       isScenarioEditMode={isScenarioEditMode}
       isLoadingScenarios={isLoadingScenarios}
       isSavingScenario={isSavingScenario}
+      isDeletingScenario={isDeletingScenario}
       scenarioTitle={scenarioTitle}
       scenarioDescription={scenarioDescription}
       onScenarioTitleChange={setScenarioTitle}
       onScenarioDescriptionChange={setScenarioDescription}
       onSaveScenario={saveScenario}
+      onDeleteScenario={deleteScenario}
       onResetScenarioChanges={resetScenarioChanges}
       onCancelScenarioEdit={cancelScenarioEdit}
       onScenarioSelect={handleScenarioSelect}

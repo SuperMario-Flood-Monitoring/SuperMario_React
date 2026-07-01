@@ -105,6 +105,10 @@ export async function updateSwmmScenario(
   return result.scenario
 }
 
+export async function deleteSwmmScenario(baseUrl: string, scenarioId: number): Promise<void> {
+  await apiClient.delete(joinSwmmApiUrl(baseUrl, `/scenarios/${scenarioId}`))
+}
+
 export async function startSwmmEngine(
   baseUrl: string,
   layout: EditorLayout,

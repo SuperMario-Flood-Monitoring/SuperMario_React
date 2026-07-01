@@ -166,6 +166,7 @@ import { useEditorLayoutState } from './useEditorLayoutState'
 import { EditableNodeLayer } from './EditableNodeLayer'
 import {
   createSwmmScenario,
+  deleteSwmmScenario,
   getSwmmScenarios,
   joinSwmmApiUrl,
   updateSwmmScenario,
@@ -3216,6 +3217,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   const [scenarioDescription, setScenarioDescription] = useState('')
   const [isLoadingScenarios, setIsLoadingScenarios] = useState(false)
   const [isSavingScenario, setIsSavingScenario] = useState(false)
+  const [isDeletingScenario, setIsDeletingScenario] = useState(false)
   const [scenarioError, setScenarioError] = useState<string | null>(null)
 
   // ref는 브라우저 파일 입력, SVG 좌표 변환, 좌표 변경 후속 클릭 억제를 위해 사용한다.
@@ -3257,6 +3259,11 @@ export const EditorCanvas = memo(function EditorCanvas({
     startClientY: number
     lastClientX: number
     lastClientY: number
+  } | null>(null)
+  const mobileContextMenuCloseTapCandidateRef = useRef<{
+    pointerId: number
+    startClientX: number
+    startClientY: number
   } | null>(null)
   const mobileMoveArmedNodeIdRef = useRef<string | null>(null)
   const isMobileAddMenuPreviewOpen = Boolean(
@@ -3688,6 +3695,44 @@ export const EditorCanvas = memo(function EditorCanvas({
       window.alert(`시나리오 저장에 실패했습니다.\n\n${message}`)
     } finally {
       setIsSavingScenario(false)
+    }
+  }
+
+  const deleteScenario = async () => {
+    if (isSavingScenario || isDeletingScenario || !selectedScenario) {
+      return
+    }
+    if (demoControlLocked) {
+      showEditorToast(demoScenarioLockMessage)
+      return
+    }
+
+    const scenarioToDelete = selectedScenario
+    const confirmed = window.confirm(`시나리오 "${scenarioToDelete.title}"을 삭제할까요?`)
+    if (!confirmed) {
+      return
+    }
+
+    setIsDeletingScenario(true)
+    setScenarioError(null)
+    try {
+      await deleteSwmmScenario(SWMM_ENGINE_URL, scenarioToDelete.id)
+      setScenarios((currentScenarios) => currentScenarios.filter((scenario) => scenario.id !== scenarioToDelete.id))
+      setSelectedScenario(null)
+      clearSelectedSwmmScenarioId()
+      setScenarioEditBaseline(null)
+      setScenarioCancelBaseline(null)
+      setScenarioTitle('')
+      setScenarioDescription('')
+      setIsScenarioEditMode(false)
+      resetEditorInteractionState()
+      showEditorToast('시나리오를 삭제했습니다.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      setScenarioError(message)
+      window.alert(`시나리오 삭제에 실패했습니다.\n\n${message}`)
+    } finally {
+      setIsDeletingScenario(false)
     }
   }
 
@@ -4658,6 +4703,22 @@ export const EditorCanvas = memo(function EditorCanvas({
         return
       }
 
+      if (
+        isMobileInput &&
+        (
+          Boolean(contextMenu && (contextMenu.nodeId || contextMenu.baseGround)) ||
+          Boolean(mobileQuickEditNodeId)
+        )
+      ) {
+        clearLongPressTimer()
+        mobileContextMenuCloseTapCandidateRef.current = {
+          pointerId: event.pointerId,
+          startClientX: event.clientX,
+          startClientY: event.clientY,
+        }
+        return
+      }
+
       if (mobileEditorMode !== 'idle') {
         clearLongPressTimer()
         setContextMenu(null)
@@ -5072,6 +5133,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     clearLongPressTimer()
     cancelCanvasPointerMove()
     mobileNodeTapCandidateRef.current = null
+    mobileContextMenuCloseTapCandidateRef.current = null
     mobileNodeMoveRef.current = null
     setCoordinateEditState(null)
     setDragState(null)
@@ -5164,9 +5226,6 @@ export const EditorCanvas = memo(function EditorCanvas({
       event.preventDefault()
       commitLayoutHistoryBatch()
       clearPointerInteractionState()
-      if (!isMobileAddMenuPreviewOpen) {
-        setContextMenu(null)
-      }
 
       const center = getPinchCenter(event.touches)
       const rect = viewport.getBoundingClientRect()
@@ -5276,6 +5335,25 @@ export const EditorCanvas = memo(function EditorCanvas({
       }
     }
     mobileNodeTapCandidateRef.current = null
+    const mobileContextMenuCloseTapEvent = event?.type === 'pointerup' && (event.pointerType === 'touch' || event.pointerType === 'pen')
+      ? event
+      : null
+    const mobileContextMenuCloseTapCandidate = mobileContextMenuCloseTapEvent
+      ? mobileContextMenuCloseTapCandidateRef.current
+      : null
+    if (mobileContextMenuCloseTapCandidate && mobileContextMenuCloseTapEvent && mobileContextMenuCloseTapCandidate.pointerId === mobileContextMenuCloseTapEvent.pointerId) {
+      const movedDistance = Math.hypot(
+        mobileContextMenuCloseTapEvent.clientX - mobileContextMenuCloseTapCandidate.startClientX,
+        mobileContextMenuCloseTapEvent.clientY - mobileContextMenuCloseTapCandidate.startClientY,
+      )
+      if (movedDistance <= MOBILE_TAP_MAX_DISTANCE_PX) {
+        setContextMenu(null)
+        setMobileQuickEditNodeId(null)
+        setMobileQuickEditPanel(null)
+        setMobileQuickEditAnchorPoint(null)
+      }
+    }
+    mobileContextMenuCloseTapCandidateRef.current = null
     mobileNodeMoveRef.current = null
 
     if (coordinateEditState) {
@@ -5371,6 +5449,16 @@ export const EditorCanvas = memo(function EditorCanvas({
             lastClientX: event.clientX,
             lastClientY: event.clientY,
           }
+        }
+      }
+      const contextMenuCloseTapCandidate = mobileContextMenuCloseTapCandidateRef.current
+      if (contextMenuCloseTapCandidate?.pointerId === event.pointerId) {
+        const movedDistance = Math.hypot(
+          event.clientX - contextMenuCloseTapCandidate.startClientX,
+          event.clientY - contextMenuCloseTapCandidate.startClientY,
+        )
+        if (movedDistance > MOBILE_TAP_MAX_DISTANCE_PX) {
+          mobileContextMenuCloseTapCandidateRef.current = null
         }
       }
     }
@@ -6252,11 +6340,13 @@ export const EditorCanvas = memo(function EditorCanvas({
       isScenarioEditMode={isScenarioEditMode}
       isLoadingScenarios={isLoadingScenarios}
       isSavingScenario={isSavingScenario}
+      isDeletingScenario={isDeletingScenario}
       scenarioTitle={scenarioTitle}
       scenarioDescription={scenarioDescription}
       onScenarioTitleChange={setScenarioTitle}
       onScenarioDescriptionChange={setScenarioDescription}
       onSaveScenario={saveScenario}
+      onDeleteScenario={deleteScenario}
       onResetScenarioChanges={resetScenarioChanges}
       onCancelScenarioEdit={cancelScenarioEdit}
       onScenarioSelect={handleScenarioSelect}

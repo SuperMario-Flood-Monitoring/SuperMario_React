@@ -15,11 +15,13 @@ export function EditorScenarioToolbar({
   isScenarioEditMode,
   isLoadingScenarios,
   isSavingScenario,
+  isDeletingScenario,
   scenarioTitle,
   scenarioDescription,
   onScenarioTitleChange,
   onScenarioDescriptionChange,
   onSaveScenario,
+  onDeleteScenario,
   onResetScenarioChanges,
   onCancelScenarioEdit,
   onScenarioSelect,
@@ -38,11 +40,13 @@ export function EditorScenarioToolbar({
   isScenarioEditMode: boolean
   isLoadingScenarios: boolean
   isSavingScenario: boolean
+  isDeletingScenario: boolean
   scenarioTitle: string
   scenarioDescription: string
   onScenarioTitleChange: (value: string) => void
   onScenarioDescriptionChange: (value: string) => void
   onSaveScenario: () => void
+  onDeleteScenario: () => void
   onResetScenarioChanges: () => void
   onCancelScenarioEdit: () => void
   onScenarioSelect: (scenarioId: string) => void
@@ -81,17 +85,29 @@ export function EditorScenarioToolbar({
             <button
               type="button"
               onClick={onSaveScenario}
-              disabled={isSavingScenario}
+              disabled={isSavingScenario || isDeletingScenario}
               className={`rounded-md border px-3 py-2 text-xs font-black disabled:cursor-not-allowed disabled:opacity-60 ${
                 isDark ? 'border-sky-900 bg-slate-950 text-sky-200 hover:bg-slate-800' : 'border-sky-300 bg-sky-100 text-sky-700 hover:bg-white'
               }`}
             >
               {isSavingScenario ? '저장 중' : '저장'}
             </button>
+            {selectedScenario ? (
+              <button
+                type="button"
+                onClick={onDeleteScenario}
+                disabled={isSavingScenario || isDeletingScenario}
+                className={`rounded-md border px-3 py-2 text-xs font-black disabled:cursor-not-allowed disabled:opacity-60 ${
+                  isDark ? 'border-rose-900 bg-slate-950 text-rose-200 hover:bg-slate-800' : 'border-rose-300 bg-rose-100 text-rose-700 hover:bg-white'
+                }`}
+              >
+                {isDeletingScenario ? '삭제 중' : '삭제'}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={onResetScenarioChanges}
-              disabled={isSavingScenario}
+              disabled={isSavingScenario || isDeletingScenario}
               className={`rounded-md border px-3 py-2 text-xs font-black disabled:cursor-not-allowed disabled:opacity-60 ${
                 isDark ? 'border-rose-900 bg-slate-950 text-rose-200 hover:bg-slate-800' : 'border-rose-300 bg-rose-100 text-rose-700 hover:bg-white'
               }`}
@@ -101,7 +117,7 @@ export function EditorScenarioToolbar({
             <button
               type="button"
               onClick={onCancelScenarioEdit}
-              disabled={isSavingScenario}
+              disabled={isSavingScenario || isDeletingScenario}
               className={`rounded-md border px-3 py-2 text-xs font-black disabled:cursor-not-allowed disabled:opacity-60 ${buttonClassName}`}
             >
               취소

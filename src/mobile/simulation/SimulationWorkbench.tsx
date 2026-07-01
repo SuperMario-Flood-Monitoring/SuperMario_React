@@ -87,9 +87,9 @@ const RAINFALL_PRESET_OPTIONS = [
   { label: '맑음', value: 0 },
   { label: '우천', value: 10 },
   { label: '호우', value: 100 },
-  { label: '폭우', value: 500 },
+  { label: '폭우', value: 1000 },
 ] as const
-// const RAINFALL_TEST_SLIDER_MAX = 500
+// const RAINFALL_TEST_SLIDER_MAX = 1000
 // const RAINFALL_TEST_SLIDER_STEP = 10
 const FULLSCREEN_ZOOM_MIN = 0.5
 const FULLSCREEN_ZOOM_DEFAULT = 1
