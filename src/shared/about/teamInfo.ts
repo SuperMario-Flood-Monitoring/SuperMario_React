@@ -1,4 +1,4 @@
-export const TEAM_PPT_URL = '#'
+export const TEAM_PPT_URL = 'https://docs.google.com/presentation/d/1Q25gOvFaGcT_i13vLAoMCJMQhZZbEFccd94zVqWQnfU/edit?usp=sharing'
 
 export interface TeamMember {
   roleLabel: string
