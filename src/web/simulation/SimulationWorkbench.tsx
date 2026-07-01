@@ -100,7 +100,8 @@ const RAINFALL_PRESET_OPTIONS = [
 ] as const
 // const RAINFALL_TEST_SLIDER_MAX = 500
 // const RAINFALL_TEST_SLIDER_STEP = 10
-const FULLSCREEN_ZOOM_MIN = 1
+const FULLSCREEN_ZOOM_MIN = 0.5
+const FULLSCREEN_ZOOM_DEFAULT = 1
 const FULLSCREEN_ZOOM_STEP = 0.25
 const FULL_BLOCKAGE_RATIO_THRESHOLD = 0.999999
 
@@ -512,7 +513,7 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
   const [isNodeStatsOpen, setIsNodeStatsOpen] = useState(false)
   const [internalFullscreen, setInternalFullscreen] = useState(false)
   const isFullscreen = onFullscreenRouteChange ? fullscreenRouteActive : internalFullscreen
-  const [fullscreenZoom, setFullscreenZoom] = useState(FULLSCREEN_ZOOM_MIN)
+  const [fullscreenZoom, setFullscreenZoom] = useState(FULLSCREEN_ZOOM_DEFAULT)
   const [fullscreenViewResetSignal, setFullscreenViewResetSignal] = useState(0)
   const [isMobileInput, setIsMobileInput] = useState(() => getInitialAppSurface() === 'mobile')
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false)
@@ -1663,10 +1664,10 @@ export const SimulationWorkbench = memo(function SimulationWorkbench({
       isDark={isDark}
       percentLabel={`${Math.round(fullscreenZoom * 100)}%`}
       canZoomOut={!isFullscreenZoomMin}
-      canReset={!isFullscreenZoomMin}
+      canReset={Math.abs(fullscreenZoom - FULLSCREEN_ZOOM_DEFAULT) > 0.001}
       onZoomOut={() => setFullscreenZoom((current) => Math.max(FULLSCREEN_ZOOM_MIN, current - FULLSCREEN_ZOOM_STEP))}
       onReset={() => {
-        setFullscreenZoom(FULLSCREEN_ZOOM_MIN)
+        setFullscreenZoom(FULLSCREEN_ZOOM_DEFAULT)
         setFullscreenViewResetSignal((current) => current + 1)
       }}
       onZoomIn={() => setFullscreenZoom((current) => current + FULLSCREEN_ZOOM_STEP)}

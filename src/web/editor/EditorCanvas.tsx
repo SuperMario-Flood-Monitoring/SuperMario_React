@@ -190,12 +190,12 @@ import type {
   ResizeState,
 } from './editorInternalTypes'
 
-const EDITOR_ZOOM_MIN = 1
+const EDITOR_ZOOM_MIN = 0.5
 const EDITOR_ZOOM_STEP = 0.25
 const EDITOR_ZOOM_DEFAULT = 1
 const EDITOR_WHEEL_ZOOM_STEP = 0.15
 const EDITOR_WHEEL_LINE_HEIGHT_PX = 16
-const RELATION_PREVIEW_ZOOM_MIN = 0.75
+const RELATION_PREVIEW_ZOOM_MIN = 0.5
 const RELATION_PREVIEW_ZOOM_STEP = 0.25
 const RELATION_PREVIEW_ZOOM_DEFAULT = 1
 const MOBILE_TAP_MAX_DISTANCE_PX = 10
@@ -3062,7 +3062,6 @@ export const EditorCanvas = memo(function EditorCanvas({
   const [selectedScenario, setSelectedScenario] = useState<SwmmScenario | null>(null)
   const [scenarioEditBaseline, setScenarioEditBaseline] = useState<EditorLayout | null>(null)
   const [scenarioCancelBaseline, setScenarioCancelBaseline] = useState<EditorLayout | null>(null)
-  const [createdScenarioEditId, setCreatedScenarioEditId] = useState<number | null>(null)
   const [isScenarioEditMode, setIsScenarioEditMode] = useState(false)
   const [scenarioTitle, setScenarioTitle] = useState('')
   const [scenarioDescription, setScenarioDescription] = useState('')
@@ -3353,7 +3352,6 @@ export const EditorCanvas = memo(function EditorCanvas({
     saveSelectedSwmmScenarioId(scenario.id)
     setScenarioEditBaseline(normalizedLayout)
     setScenarioCancelBaseline(null)
-    setCreatedScenarioEditId(null)
     setScenarioTitle(scenario.title)
     setScenarioDescription(scenario.description)
     setIsScenarioEditMode(false)
@@ -3394,7 +3392,6 @@ export const EditorCanvas = memo(function EditorCanvas({
       setSelectedScenario(null)
       setScenarioEditBaseline(null)
       setScenarioCancelBaseline(null)
-      setCreatedScenarioEditId(null)
       setScenarioTitle('')
       setScenarioDescription('')
       setIsScenarioEditMode(false)
@@ -3411,7 +3408,6 @@ export const EditorCanvas = memo(function EditorCanvas({
     clearSelectedSwmmScenarioId()
     setSelectedScenario(null)
     setScenarioEditBaseline(nextLayout)
-    setCreatedScenarioEditId(null)
     setScenarioTitle('새 시나리오')
     setScenarioDescription('')
     setIsScenarioEditMode(true)
@@ -3429,7 +3425,6 @@ export const EditorCanvas = memo(function EditorCanvas({
     }
     setScenarioEditBaseline(normalizeEditorLayout(selectedScenario.layoutJson))
     setScenarioCancelBaseline(null)
-    setCreatedScenarioEditId(null)
     setScenarioTitle(selectedScenario.title)
     setScenarioDescription(selectedScenario.description)
     setIsScenarioEditMode(true)
@@ -3451,18 +3446,15 @@ export const EditorCanvas = memo(function EditorCanvas({
       const selectedLayout = normalizeEditorLayout(selectedScenario.layoutJson)
       replaceLayout(selectedLayout)
       setScenarioEditBaseline(selectedLayout)
-      setCreatedScenarioEditId(null)
       setScenarioTitle(selectedScenario.title)
       setScenarioDescription(selectedScenario.description)
     } else if (scenarioCancelBaseline) {
       replaceLayout(scenarioCancelBaseline)
       setScenarioEditBaseline(null)
-      setCreatedScenarioEditId(null)
       setScenarioTitle('')
       setScenarioDescription('')
     } else {
       setScenarioEditBaseline(null)
-      setCreatedScenarioEditId(null)
       setScenarioTitle('')
       setScenarioDescription('')
     }
@@ -3476,7 +3468,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     if (isSavingScenario) {
       return
     }
-    if (demoControlLocked && selectedScenario && selectedScenario.id !== createdScenarioEditId) {
+    if (demoControlLocked && selectedScenario) {
       showEditorToast(demoScenarioLockMessage)
       return
     }
@@ -3491,7 +3483,6 @@ export const EditorCanvas = memo(function EditorCanvas({
     setScenarioError(null)
     try {
       const exportLayout = normalizeRelationAttachments(layout)
-      const isCreatingScenario = !selectedScenario
       const savedScenario = selectedScenario
         ? await updateSwmmScenario(SWMM_ENGINE_URL, selectedScenario.id, {
             title,
@@ -3508,10 +3499,9 @@ export const EditorCanvas = memo(function EditorCanvas({
       saveSelectedSwmmScenarioId(savedScenario.id)
       setScenarioEditBaseline(normalizeEditorLayout(savedScenario.layoutJson))
       setScenarioCancelBaseline(null)
-      setCreatedScenarioEditId(isCreatingScenario ? savedScenario.id : createdScenarioEditId)
       setScenarioTitle(savedScenario.title)
       setScenarioDescription(savedScenario.description)
-      setIsScenarioEditMode(isCreatingScenario || selectedScenario?.id === createdScenarioEditId)
+      setIsScenarioEditMode(false)
       setScenarios((currentScenarios) => [
         savedScenario,
         ...currentScenarios.filter((scenario) => scenario.id !== savedScenario.id),
@@ -6498,7 +6488,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   ) : null
   const editorZoomRatio = editorZoom / EDITOR_ZOOM_DEFAULT
   const editorZoomPercentLabel = formatZoomPercentLabel(editorZoom, EDITOR_ZOOM_DEFAULT)
-  const mobileCanvasScale = isMobileInput ? Math.max(1, editorZoomRatio) : 1
+  const mobileCanvasScale = isMobileInput ? Math.max(EDITOR_ZOOM_MIN, editorZoomRatio) : 1
   const renderedEditorViewBox = isMobileInput ? mobileScrollViewBox : editorViewBox
   const mobileEditorLocksScroll = false
   const editorSystemSurfaceClassName = isDark
@@ -6537,12 +6527,12 @@ export const EditorCanvas = memo(function EditorCanvas({
       className="fixed right-4 top-24 z-[130] lg:top-28"
       isDark={isDark}
       percentLabel={editorZoomPercentLabel}
-      canZoomOut={editorZoomRatio > 1.001}
-      canReset={editorZoomRatio > 1.001}
+      canZoomOut={editorZoomRatio > EDITOR_ZOOM_MIN + 0.001}
+      canReset={Math.abs(editorZoomRatio - 1) > 0.001}
       zoomOutLabel="편집 캔버스 축소"
       resetLabel="편집 캔버스 확대 초기화"
       zoomInLabel="편집 캔버스 확대"
-      onZoomOut={() => setEditorZoom((current) => Math.max(EDITOR_ZOOM_DEFAULT, current - EDITOR_ZOOM_STEP))}
+      onZoomOut={() => setEditorZoom((current) => Math.max(EDITOR_ZOOM_MIN, current - EDITOR_ZOOM_STEP))}
       onReset={() => {
         setEditorZoom(EDITOR_ZOOM_DEFAULT)
         setEditorPan({ x: 0, y: 0 })
@@ -6718,6 +6708,29 @@ export const EditorCanvas = memo(function EditorCanvas({
             onPointerCancel={finishPointerInteraction}
             onPointerLeave={handleCanvasPointerLeave}
           >
+            {terrainNodes.map((node) => {
+              const renderNode = renderNodesById.get(node.id) ?? node
+              if (normalizeTerrainKind(renderNode.props.terrainKind) !== 'ground') {
+                return null
+              }
+
+              const skyHeight = Math.max(0, renderNode.y)
+              if (skyHeight <= 1 || renderNode.width <= 1) {
+                return null
+              }
+
+              return (
+                <rect
+                  key={`${node.id}-ground-sky`}
+                  x={renderNode.x}
+                  y="0"
+                  width={renderNode.width}
+                  height={skyHeight}
+                  fill="#e8f5ff"
+                  pointerEvents="none"
+                />
+              )
+            })}
             {hasVisibleBaseGround ? (
               <SoilBackground
                 minX={baseGroundBounds.left}

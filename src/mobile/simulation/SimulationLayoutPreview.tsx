@@ -88,6 +88,7 @@ const FLOW_ACTIVE_SPEED_THRESHOLD = 0.001
 const FLOW_ACTIVE_CMS_THRESHOLD = 0.00005
 const FULL_BLOCKAGE_RATIO_THRESHOLD = 0.999999
 const FULLSCREEN_DRAG_THRESHOLD_PX = 3
+const FULLSCREEN_ZOOM_MIN = 0.5
 const FULLSCREEN_WHEEL_ZOOM_STEP = 0.15
 const WHEEL_LINE_HEIGHT_PX = 16
 
@@ -2180,7 +2181,7 @@ export function SimulationLayoutPreview({
       return
     }
 
-    const scale = Math.max(1, zoom)
+    const scale = Math.max(FULLSCREEN_ZOOM_MIN, zoom)
     content.style.width = `${scale * 100}%`
     content.style.height = `${scale * 100}%`
 
@@ -2215,7 +2216,7 @@ export function SimulationLayoutPreview({
       return `${bounds.minX} ${bounds.minY} ${svgWidth} ${svgHeight}`
     }
 
-    const safeZoom = Math.max(1, isFullscreen ? fullscreenZoom : 1)
+    const safeZoom = Math.max(FULLSCREEN_ZOOM_MIN, isFullscreen ? fullscreenZoom : 1)
     const viewWidth = svgWidth / safeZoom
     const viewHeight = svgHeight / safeZoom
     const centerX = bounds.minX + svgWidth / 2 - (isFullscreen ? fullscreenPan.x : 0)
@@ -2345,7 +2346,7 @@ export function SimulationLayoutPreview({
       const center = getPinchCenter(event.touches)
       const rect = root.getBoundingClientRect()
       const currentZoom = fullscreenZoomRef.current
-      const currentScale = Math.max(1, currentZoom)
+      const currentScale = Math.max(FULLSCREEN_ZOOM_MIN, currentZoom)
       const anchorContentX = (root.scrollLeft + center.clientX - rect.left) / currentScale
       const anchorContentY = (root.scrollTop + center.clientY - rect.top) / currentScale
 
@@ -2392,7 +2393,7 @@ export function SimulationLayoutPreview({
       }
 
       event.preventDefault()
-      const nextZoom = Math.max(1, pinch.startZoom * (distance / pinch.startDistance))
+      const nextZoom = Math.max(FULLSCREEN_ZOOM_MIN, pinch.startZoom * (distance / pinch.startDistance))
       mobileFullscreenPinchAnchorRef.current = {
         contentX: pinch.anchorContentX,
         contentY: pinch.anchorContentY,
@@ -2432,7 +2433,7 @@ export function SimulationLayoutPreview({
     }
 
     const rect = svgRef.current?.getBoundingClientRect()
-    const safeZoom = Math.max(1, fullscreenZoom)
+    const safeZoom = Math.max(FULLSCREEN_ZOOM_MIN, fullscreenZoom)
     const viewWidth = svgWidth / safeZoom
     const viewHeight = svgHeight / safeZoom
     const viewportScale = rect
@@ -2491,7 +2492,7 @@ export function SimulationLayoutPreview({
   }
 
   const getFullscreenViewportMetrics = useCallback((zoom: number, pan = fullscreenPan) => {
-    const safeZoom = Math.max(1, zoom)
+    const safeZoom = Math.max(FULLSCREEN_ZOOM_MIN, zoom)
     const viewWidth = svgWidth / safeZoom
     const viewHeight = svgHeight / safeZoom
     const centerX = bounds.minX + svgWidth / 2 - pan.x
@@ -2537,7 +2538,7 @@ export function SimulationLayoutPreview({
     }
 
     event.preventDefault()
-    const currentZoom = Math.max(1, fullscreenZoom)
+    const currentZoom = Math.max(FULLSCREEN_ZOOM_MIN, fullscreenZoom)
     const currentView = getFullscreenViewportMetrics(currentZoom)
     const viewportScale = Math.min(rect.width / currentView.viewWidth, rect.height / currentView.viewHeight)
     if (!Number.isFinite(viewportScale) || viewportScale <= 0) {
@@ -2550,7 +2551,7 @@ export function SimulationLayoutPreview({
       }
 
       const direction = event.deltaY < 0 ? 1 : -1
-      const nextZoom = Math.max(1, currentZoom + direction * FULLSCREEN_WHEEL_ZOOM_STEP)
+      const nextZoom = Math.max(FULLSCREEN_ZOOM_MIN, currentZoom + direction * FULLSCREEN_WHEEL_ZOOM_STEP)
       const renderedWidth = currentView.viewWidth * viewportScale
       const renderedHeight = currentView.viewHeight * viewportScale
       const offsetX = (rect.width - renderedWidth) / 2
@@ -2668,7 +2669,7 @@ export function SimulationLayoutPreview({
   )
 
   if (isFullscreen) {
-    const mobileFullscreenCanvasScale = isMobileInput ? Math.max(1, fullscreenZoom) : 1
+    const mobileFullscreenCanvasScale = isMobileInput ? Math.max(FULLSCREEN_ZOOM_MIN, fullscreenZoom) : 1
 
     return (
       <div
