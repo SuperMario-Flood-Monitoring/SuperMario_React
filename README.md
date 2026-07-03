@@ -4,6 +4,10 @@
 
 이 레포는 **프론트엔드 클라이언트**입니다. 사용자는 React 화면에서 배수도 JSON을 편집하고, 시나리오로 저장한 뒤, Django/SWMM 서버에 실행 요청을 보내 1초 tick 단위의 runtime snapshot을 시각화합니다.
 
+## 데모
+
+- 운영 데모: [https://supermario.o-r.kr/demo/admin](https://supermario.o-r.kr/demo/admin)
+
 ## 핵심 기능
 
 - 배수 객체 편집
